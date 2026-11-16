@@ -32,7 +32,11 @@ export function renderBody(template: string, query: string, limit: number): unkn
     if (typeof value === "string") {
       if (value === "{{query}}") return query;
       if (value === "{{limit}}") return limit;
-      return value.replaceAll("{{query}}", query).replaceAll("{{limit}}", String(limit));
+      // A function, so that `$&` and the like in a question stay text, and in
+      // one pass, so that a question containing "{{limit}}" stays as it is.
+      return value.replace(/\{\{(query|limit)\}\}/g, (_placeholder, name: string) =>
+        name === "query" ? query : String(limit),
+      );
     }
     if (Array.isArray(value)) return value.map(walk);
     if (value && typeof value === "object") {

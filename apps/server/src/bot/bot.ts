@@ -34,6 +34,8 @@ export class Bot {
   private web: WebClient | null = null;
   private port: SlackPort | null = null;
   private fingerprint: string | null = null;
+  /** The bot's user ID from Slack, when the connection check has not stored it (yet). */
+  private ownUserId: { fingerprint: string; id: string } | null = null;
   private state: BotState = "not_configured";
   private connectedSince: Date | null = null;
   private problemSince: number | null = null;
@@ -65,6 +67,11 @@ export class Bot {
 
   private onConfig(next: BotConfig, previous: BotConfig) {
     const fingerprint = next.slack?.fingerprint ?? null;
+    // A reload rebuilds the configuration from the database; keep the user ID
+    // the bot looked up for these tokens.
+    if (next.slack && !next.slack.botUserId && this.ownUserId?.fingerprint === fingerprint) {
+      next.slack.botUserId = this.ownUserId.id;
+    }
     if (fingerprint !== this.fingerprint) {
       this.fingerprint = fingerprint;
       void this.connect(next);
@@ -112,7 +119,14 @@ export class Bot {
       // Normally stored by the connection check; ask Slack once otherwise.
       try {
         const auth = await this.web.auth.test();
-        slack.botUserId = auth.user_id ?? null;
+        if (auth.user_id) {
+          this.ownUserId = { fingerprint: slack.fingerprint, id: auth.user_id };
+          // A reload during the lookup may have replaced the configuration.
+          for (const target of [slack, this.store.current.slack]) {
+            if (target?.fingerprint === slack.fingerprint && !target.botUserId)
+              target.botUserId = auth.user_id;
+          }
+        }
       } catch {
         logger.warn("could not look up the bot's user ID");
       }

@@ -126,18 +126,31 @@ async function checkReferences(tx: Tx, input: AgentInput, agentId: string | null
   }
 }
 
-async function writeLinks(tx: Tx, agentId: string, input: AgentInput) {
-  const previous = await tx.select().from(agentChannels).where(eq(agentChannels.agentId, agentId));
-  const knownNames = new Map(previous.map((row) => [row.channelId, row.channelName]));
-  const missing = input.channels.filter((id) => !knownNames.get(id));
-  const resolved = missing.length > 0 ? await channelNames(missing) : new Map<string, string>();
+/**
+ * Display names of the channels: the stored ones, the others from Slack.
+ * Runs before the transaction, so that a slow Slack does not hold it open.
+ */
+async function lookUpChannelNames(db: DbOrTx, channels: string[]): Promise<Map<string, string>> {
+  if (channels.length === 0) return new Map();
+  const stored = await db
+    .select({ channelId: agentChannels.channelId, channelName: agentChannels.channelName })
+    .from(agentChannels)
+    .where(inArray(agentChannels.channelId, channels));
+  const names = new Map<string, string>();
+  for (const row of stored) if (row.channelName) names.set(row.channelId, row.channelName);
+  const missing = channels.filter((id) => !names.has(id));
+  if (missing.length > 0) for (const [id, name] of await channelNames(missing)) names.set(id, name);
+  return names;
+}
+
+async function writeLinks(tx: Tx, agentId: string, input: AgentInput, names: Map<string, string>) {
   await tx.delete(agentChannels).where(eq(agentChannels.agentId, agentId));
   if (input.channels.length > 0) {
     await tx.insert(agentChannels).values(
       input.channels.map((channelId) => ({
         channelId,
         agentId,
-        channelName: knownNames.get(channelId) ?? resolved.get(channelId) ?? null,
+        channelName: names.get(channelId) ?? null,
       })),
     );
   }
@@ -307,10 +320,11 @@ router.post("/agents", async (c) => {
   const actor = requireUser(c);
   const input = await jsonBody(c, agentInputSchema);
   const db = getDb();
+  const names = await lookUpChannelNames(db, input.channels);
   const id = await db.transaction(async (tx) => {
     await checkReferences(tx, input, null);
     const [created] = await tx.insert(agents).values(columns(input)).returning({ id: agents.id });
-    await writeLinks(tx, created!.id, input);
+    await writeLinks(tx, created!.id, input, names);
     await audit(tx, actor, {
       action: "agent.created",
       entityType: "agent",
@@ -338,8 +352,15 @@ router.put("/agents/:id", async (c) => {
   const id = idParam(c);
   const input = await jsonBody(c, agentUpdateSchema);
   const db = getDb();
+  const names = await lookUpChannelNames(db, input.channels);
   await db.transaction(async (tx) => {
-    const [current] = await tx.select({ version: agents.version }).from(agents).where(eq(agents.id, id));
+    // The row lock makes simultaneous saves of the same version wait here and
+    // then see the new version, so only the first one goes through.
+    const [current] = await tx
+      .select({ version: agents.version })
+      .from(agents)
+      .where(eq(agents.id, id))
+      .for("update");
     if (!current) throw notFound("Agent not found");
     if (current.version !== input.version) {
       throw conflict("Someone else changed this agent. Reload to see the changes.", "version_conflict");
@@ -349,7 +370,7 @@ router.put("/agents/:id", async (c) => {
       .update(agents)
       .set({ ...columns(input), version: current.version + 1, updatedAt: new Date() })
       .where(eq(agents.id, id));
-    await writeLinks(tx, id, input);
+    await writeLinks(tx, id, input, names);
     await audit(tx, actor, {
       action: "agent.updated",
       entityType: "agent",

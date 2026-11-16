@@ -32,6 +32,12 @@ describe("renderBody", () => {
       n: [3],
     });
   });
+
+  it("keeps questions with $ patterns or placeholders as they are", () => {
+    expect(renderBody('{"q": "about {{query}}"}', "costs $& and $' and {{limit}}", 3)).toEqual({
+      q: "about costs $& and $' and {{limit}}",
+    });
+  });
 });
 
 describe("mapResults", () => {

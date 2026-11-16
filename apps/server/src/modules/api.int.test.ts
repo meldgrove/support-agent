@@ -166,6 +166,22 @@ describe("agents", () => {
     expect(stale.body.error.code).toBe("version_conflict");
   });
 
+  it("lets only one of several simultaneous saves of the same version through", async () => {
+    const editor = await createUser("editor");
+    const created = await request("POST", "/api/v1/agents", { userId: editor.id, body: agentInput() });
+    const saves = await Promise.all(
+      ["A", "B", "C", "D", "E"].map((name) =>
+        request("PUT", `/api/v1/agents/${created.body.id}`, {
+          userId: editor.id,
+          body: { ...agentInput({ name }), version: 1 },
+        }),
+      ),
+    );
+    expect(saves.map((save) => save.status).sort()).toEqual([200, 409, 409, 409, 409]);
+    const saved = await request("GET", `/api/v1/agents/${created.body.id}`, { userId: editor.id });
+    expect(saved.body.version).toBe(2);
+  });
+
   it("requires a model, channels and a provider for enabled agents", async () => {
     const editor = await createUser("editor");
     const response = await request("POST", "/api/v1/agents", {
