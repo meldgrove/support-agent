@@ -15,8 +15,9 @@
 # Without a PostgreSQL of your own, add compose.postgres.yaml:
 #   docker compose -f compose.yaml -f compose.postgres.yaml up -d
 #
-# Put a TLS-terminating reverse proxy in front of port 3000 and set APP_URL to
-# its public https URL. The bot needs no public address: it connects to Slack.
+# Put a TLS-terminating reverse proxy in front of port 3000 (SUPPORT_AGENT_PORT
+# changes the host port) and set APP_URL to its public https URL. The bot needs
+# no public address: it connects to Slack.
 
 x-image: &image ghcr.io/meldgrove/support-agent:${SUPPORT_AGENT_VERSION:?Set SUPPORT_AGENT_VERSION to a release, e.g. 0.1.0}
 
@@ -55,7 +56,10 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "127.0.0.1:3000:3000"
+      # The host port for a reverse proxy on the host. Platforms with their own
+      # proxy (Coolify) reach `web` over the Docker network; set
+      # SUPPORT_AGENT_PORT to any free port when 3000 is taken.
+      - "127.0.0.1:${SUPPORT_AGENT_PORT:-3000}:3000"
     healthcheck:
       test:
         - CMD

@@ -33,7 +33,11 @@ acting.
 | `compose.postgres.yaml` | Adds a PostgreSQL 18 container, for servers without a database of their own.                        |
 
 The image runs as an unprivileged user (uid 1000). `web` listens on port
-3000, published on `127.0.0.1` for a reverse proxy on the same machine.
+3000, published on `127.0.0.1:3000` for a reverse proxy on the same machine.
+When another service holds that port (Docker reports `port is already
+allocated`), set `SUPPORT_AGENT_PORT` to a free one. A platform with its own
+proxy, such as Coolify, reaches `web` through the Docker network and does not
+use this port, so any free port will do.
 
 1. **Get the files:** clone the repository and check out the release, e.g.
    `git checkout v0.1.0`. Platforms that read `compose.yaml` from the
