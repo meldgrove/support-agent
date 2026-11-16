@@ -59,6 +59,14 @@ process with a list of the problems.
 
 `APP_VERSION` is set by release images; the overview page shows it.
 
+Reports name lines in the TypeScript sources when Sentry has the release's
+source maps. Releases upload them to the Meldgrove project; for your own
+Sentry project, upload them from the image (`/app/apps/server/dist` and
+`/app/apps/web/dist`) with `npx sentry sourcemap upload <directory>` and
+`SENTRY_ORG`, `SENTRY_PROJECT` and `SENTRY_AUTH_TOKEN` set. Sentry matches
+them by the debug IDs in the bundles. Code mappings `/app/` (server) and
+`app:///` (web app), each to the repository root, link the lines to the code.
+
 ## Development only
 
 `WEB_DIST_DIR` and `MIGRATIONS_DIR` override where the built web app and the

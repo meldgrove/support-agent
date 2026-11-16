@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env.local --clear-screen=false src/main.ts",
     "bot": "APP_ROLE=bot tsx --env-file-if-exists=../../.env.local src/main.ts",
-    "build": "node scripts/build.mjs",
+    "build": "node scripts/build.mjs && node ../../scripts/inject-debug-ids.mjs dist",
     "start": "node dist/main.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --project unit",

@@ -97,6 +97,30 @@ describe("redactErrorReport", () => {
     );
   });
 
+  it("keeps the debug IDs that link bundles to their source maps", () => {
+    const report = redactErrorReport({
+      debug_meta: {
+        sdk_info: { sdk_name: "x" },
+        images: [
+          { type: "sourcemap", code_file: "/app/apps/server/dist/main.mjs", debug_id: "d-1", extra: PRIVATE },
+          {
+            type: "sourcemap",
+            code_file: `https://support.example.org/assets/index-a1.js?q=${PRIVATE}`,
+            debug_id: "d-2",
+          },
+        ],
+      },
+    });
+    expect(report).toEqual({
+      debug_meta: {
+        images: [
+          { type: "sourcemap", code_file: "/app/apps/server/dist/main.mjs", debug_id: "d-1" },
+          { type: "sourcemap", code_file: "https://support.example.org/assets/index-a1.js", debug_id: "d-2" },
+        ],
+      },
+    });
+  });
+
   it("keeps the log message with its ids and codes", () => {
     const report = redactErrorReport({
       message: "job failed permanently",

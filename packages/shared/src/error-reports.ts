@@ -1,7 +1,8 @@
 /**
  * What an error report to Sentry may contain, on the server and in the web
- * app: the error type, code locations, where it happened, and the server's
- * own log message with its ids and codes. Everything else is removed: error
+ * app: the error type, code locations (with the debug IDs that link them to
+ * the uploaded source maps), where it happened, and the server's own log
+ * message with its ids and codes. Everything else is removed: error
  * messages (database errors quote values), request data, people, local
  * variables and breadcrumbs can all hold personal data.
  */
@@ -35,6 +36,8 @@ const KEPT_FRAME_FIELDS = new Set([
   "post_context",
   "pre_context",
 ]);
+/** A debug image links a bundle (`code_file`, as in the frames) to its source map. */
+const KEPT_IMAGE_FIELDS = new Set(["code_file", "debug_id", "type"]);
 /**
  * Fields of a logged error (the `pino` context). Server logs carry ids and
  * codes, never personal data; `path` and validation issues can, so they go.
@@ -101,6 +104,16 @@ export function redactErrorReport<T extends object>(event: T): T {
           return kept;
         });
         return { ...exception, stacktrace: { frames } };
+      }),
+    };
+  }
+  const debugMeta = (event as Fields).debug_meta;
+  if (isFields(debugMeta) && Array.isArray(debugMeta.images)) {
+    report.debug_meta = {
+      images: debugMeta.images.filter(isFields).map((image) => {
+        const kept = pick(image, (key) => KEPT_IMAGE_FIELDS.has(key));
+        if ("code_file" in kept) kept.code_file = codeLocation(kept.code_file);
+        return kept;
       }),
     };
   }

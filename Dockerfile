@@ -17,6 +17,17 @@ RUN npm ci --no-audit --no-fund
 FROM deps AS build
 COPY . .
 RUN npm run build
+# Release builds upload the source maps of the server and the web app to
+# Sentry, which finds them by the debug IDs the build wrote into the bundles
+# (scripts/inject-debug-ids.mjs). Without the token, nothing is uploaded.
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
+RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
+    if [ -n "$SENTRY_AUTH_TOKEN" ]; then \
+      export SENTRY_CLI_NO_TELEMETRY=1 SENTRY_CLI_NO_UPDATE_CHECK=1 \
+      && node_modules/.bin/sentry sourcemap upload apps/server/dist \
+      && node_modules/.bin/sentry sourcemap upload apps/web/dist; \
+    fi
 
 FROM base AS prod-deps
 RUN npm ci --omit=dev --workspace @support-agent/server --include-workspace-root=false --no-audit --no-fund

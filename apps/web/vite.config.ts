@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 const server = process.env.SUPPORT_AGENT_SERVER_URL ?? "http://localhost:3000";
+const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -19,7 +20,20 @@ export default defineConfig({
       "/-": { target: server, changeOrigin: false },
     },
   },
-  build: { outDir: "dist", sourcemap: true, chunkSizeWarningLimit: 1500 },
+  build: {
+    outDir: "dist",
+    sourcemap: true,
+    chunkSizeWarningLimit: 1500,
+    rolldownOptions: {
+      output: {
+        // Source paths from the repository root (app:///apps/web/src/…), the
+        // same on every host, so that error reports link to the code (Sentry
+        // code mapping app:/// → repository root).
+        sourcemapPathTransform: (source, sourcemapPath) =>
+          `app:///${path.relative(repositoryRoot, path.resolve(path.dirname(sourcemapPath), source))}`,
+      },
+    },
+  },
   test: {
     environment: "jsdom",
     setupFiles: ["src/test-setup.ts"],

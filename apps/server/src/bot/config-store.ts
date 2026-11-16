@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "@support-agent/shared/api/settings";
 import { config } from "../config";
 import { getDb } from "../db/client";
-import { decryptSecret } from "../core/crypto";
+import { SecretDecryptionError, decryptSecret } from "../core/crypto";
 import { getAppSettings, getStoredSlack } from "../core/settings";
 import { CONFIG_CHANNEL } from "../core/config-events";
 import { loadAgentRuntimes } from "../agent/runtime";
@@ -72,6 +72,8 @@ export class ConfigStore {
   private timer: NodeJS.Timeout | null = null;
   private pending: NodeJS.Timeout | null = null;
   private stopped = false;
+  /** Failed reloads in a row. */
+  private failures = 0;
 
   constructor(private readonly onChange: (next: BotConfig, previous: BotConfig) => void) {}
 
@@ -86,9 +88,18 @@ export class ConfigStore {
       const next = await loadBotConfig();
       const previous = this.current;
       this.current = next;
+      this.failures = 0;
       this.onChange(next, previous);
     } catch (error) {
-      logger.warn({ err: error }, "could not reload the configuration; keeping the last one");
+      this.failures += 1;
+      // A short database outage heals by itself. A credential the key cannot
+      // decrypt does not, and neither does a database gone for five reloads:
+      // those are errors (and error reports), once per run of failures.
+      const report = error instanceof SecretDecryptionError ? this.failures === 1 : this.failures === 5;
+      logger[report ? "error" : "warn"](
+        { err: error, failures: this.failures },
+        "could not reload the configuration; keeping the last one",
+      );
     }
   }
 

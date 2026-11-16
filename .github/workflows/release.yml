@@ -54,3 +54,9 @@ jobs:
       upgrade_doc: docs/deployment.md#upgrades
       title: Meldgrove Support Agent
       description: "A self-hosted support agent for Slack: answers questions from your knowledge base with source links, with an admin interface for agents, models and channels."
+      # Releases upload their source maps to this Sentry project, with the
+      # SENTRY_AUTH_TOKEN secret (an organization token).
+      sentry_org: meldgrove
+      sentry_project: support-agent
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
