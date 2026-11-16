@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "26.13.0"
+
+jobs:
+  checks:
+    name: Lint, types, unit tests, build, audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - name: Migrations match the schema
+        run: |
+          npm run db:generate -- --name ci-check
+          if [ -n "$(git status --porcelain apps/server/drizzle)" ]; then
+            git status --porcelain apps/server/drizzle
+            echo "The schema in apps/server/src/db/schema has changes without a migration. Run: npm run db:generate"
+            exit 1
+          fi
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
+  integration:
+    name: Integration tests (PostgreSQL 18)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: support_agent
+          POSTGRES_PASSWORD: support_agent
+          POSTGRES_DB: support_agent
+        ports: ["55436:5432"]
+        options: >-
+          --health-cmd "pg_isready -U support_agent -d support_agent"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:integration
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t support-agent:ci .
+      - name: The image runs as a non-root user
+        run: test "$(docker run --rm --entrypoint id support-agent:ci -u)" = "1000"

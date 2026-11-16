@@ -1,0 +1,62 @@
+# Maintainers start a release in Actions > Release > Run workflow; the steps
+# are in CONTRIBUTING.md (Releases). The jobs are the release workflow that every
+# Meldgrove repository shares (https://github.com/meldgrove/.github): this
+# file holds the triggers and this repository's values.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to raise (the first release starts from 0.0.0)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      candidate:
+        description: "Release candidate: publish vX.Y.Z-rc.N for testing (no latest)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run: build, show the version and notes, publish nothing"
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-entrypoint.sh
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('release-pr-{0}', github.ref) || 'release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  release:
+    permissions:
+      actions: read # find the CI run of the commit
+      contents: write # push the tag, create the GitHub Release, move stable
+      pull-requests: read # read the labels of the merged pull requests
+      packages: write # push the image, store the attestation
+      id-token: write # sign the attestation
+      attestations: write
+      artifact-metadata: write
+    uses: meldgrove/.github/.github/workflows/release.yml@ec8cbc167c9eb7259158c832740e61adbc86897a # v1.0.0
+    with:
+      bump: ${{ inputs.bump || 'patch' }}
+      candidate: ${{ inputs.candidate || false }}
+      dry_run: ${{ inputs.dry_run || false }}
+      image: ghcr.io/meldgrove/support-agent
+      upgrade_doc: docs/deployment.md#upgrades
+      title: Meldgrove Support Agent
+      description: "A self-hosted support agent for Slack: answers questions from your knowledge base with source links, with an admin interface for agents, models and channels."
+      # Releases upload their source maps to this Sentry project, with the
+      # SENTRY_AUTH_TOKEN secret (an organization token).
+      sentry_org: meldgrove
+      sentry_project: support-agent
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
