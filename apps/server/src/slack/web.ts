@@ -123,23 +123,32 @@ export async function checkSlackTokens(botToken: string, appToken: string | null
     return { ...result, ok: false, message: "Enter the app-level token (xapp-…) as well" };
   }
   try {
-    await new WebClient(undefined, {
+    // Only in the Authorization header, as the bot's Socket Mode client sends it:
+    // Slack answers apps.connections.open with invalid_auth when the token is
+    // also in the request body, which a per-call `token` argument adds.
+    await new WebClient(appToken, {
       logger: slackLogger("slack-web"),
       timeout: 20_000,
       ...slackApiUrl(),
-    }).apps.connections.open({
-      token: appToken,
-    });
+    }).apps.connections.open({});
   } catch (error) {
-    const code = slackErrorCode(error);
-    return {
-      ...result,
-      ok: false,
-      message:
-        code === "not_allowed_token_type" || code === "invalid_auth"
-          ? "Slack rejected the app-level token; it needs the connections:write scope"
-          : `The app-level token does not work (${code}). Is Socket Mode turned on?`,
-    };
+    return { ...result, ok: false, message: appTokenProblem(slackErrorCode(error)) };
   }
   return result;
+}
+
+function appTokenProblem(code: string): string {
+  switch (code) {
+    case "invalid_auth":
+    case "not_authed":
+    case "token_revoked":
+    case "token_expired":
+      return `Slack rejected the app-level token (${code}). Generate a new one under Basic Information → App-Level Tokens.`;
+    case "not_allowed_token_type":
+      return "This is not an app-level token. Use one from Basic Information → App-Level Tokens (xapp-…).";
+    case "missing_scope":
+      return "The app-level token lacks the connections:write scope.";
+    default:
+      return `The app-level token does not work (${code}). Is Socket Mode turned on?`;
+  }
 }
