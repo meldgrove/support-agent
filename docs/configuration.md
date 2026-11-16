@@ -1,0 +1,66 @@
+# Configuration
+
+The environment holds what the processes need to start: the database, the
+secrets, sign-in and the bot's limits. Everything else (Slack, model
+providers, knowledge sources, agents, retention) is set in the admin
+interface and stored in the database.
+
+Blank values count as unset. A missing or invalid required value stops the
+process with a list of the problems.
+
+## Required
+
+| Variable             | Description                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | PostgreSQL connection URL, e.g. `postgres://support_agent:…@postgres:5432/support_agent`.                                                                |
+| `APP_URL`            | Public URL of the admin interface, e.g. `https://support.example.org`. Sign-in redirects and the cross-site check use it.                                |
+| `AUTH_SECRET`        | Signs sessions. At least 32 characters: `openssl rand -base64 32`.                                                                                       |
+| `ENCRYPTION_KEY`     | Encrypts the stored API keys and tokens. 32 bytes, base64: `openssl rand -base64 32`. **Back it up:** without it, the stored keys must be entered again. |
+| `OIDC_ISSUER`        | Issuer URL of the OpenID Connect provider (see [Deployment](deployment.md#sign-in)).                                                                     |
+| `OIDC_CLIENT_ID`     | Client ID at that provider.                                                                                                                              |
+| `OIDC_CLIENT_SECRET` | Client secret at that provider.                                                                                                                          |
+
+## Sign-in
+
+| Variable             | Default                | Description                                                                                            |
+| -------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ADMIN_EMAILS`       | empty                  | Comma-separated email addresses that are always active admins. Set at least one for the first sign-in. |
+| `OIDC_PROVIDER_NAME` | `single sign-on`       | Shown on the sign-in button: "Sign in with …".                                                         |
+| `OIDC_SCOPES`        | `openid email profile` | Requested scopes.                                                                                      |
+| `OIDC_PKCE`          | `true`                 | Proof Key for Code Exchange. Turn it off only for a provider that rejects it.                          |
+
+## Processes
+
+| Variable             | Default            | Description                                                                                                                 |
+| -------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ROLE`           | `all`              | `all`, `web`, `bot` or `migrate`. The image's command sets it.                                                              |
+| `PORT` / `HOST`      | `3000` / `0.0.0.0` | Where the admin interface listens.                                                                                          |
+| `APP_NAME`           | `Support Agent`    | Name in the admin interface and the default name of the Slack app.                                                          |
+| `TRUST_PROXY`        | `0`                | Reverse proxies in front of the app: `true` (one), a number of hops, or `false`. `compose.yaml` sets `true`.                |
+| `RUN_MIGRATIONS`     | `false`            | Apply migrations when a process starts (single-container setups). `compose.yaml` runs a separate `migrate` service instead. |
+| `DATABASE_POOL_SIZE` | `10`               | Database connections per process.                                                                                           |
+| `LOG_LEVEL`          | `info`             | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`. Logs are JSON lines on standard output.                     |
+
+## Bot
+
+| Variable               | Default                                   | Description                                                                                                                |
+| ---------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `BOT_WATCHDOG_SECONDS` | `300`                                     | The bot exits when Slack stays unreachable this long, so the platform restarts it. `0` turns the watchdog off.             |
+| `BOT_HEARTBEAT_FILE`   | unset (`/tmp/bot-heartbeat` in the image) | Touched every 30 seconds while the bot is connected to Slack (or Slack is not set up yet), for the container health check. |
+| `BOT_CONCURRENCY`      | `4`                                       | Messages the bot works on at the same time.                                                                                |
+
+## Error reports
+
+| Variable             | Description                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `SENTRY_DSN`         | Send error reports to Sentry or a compatible service. Off when unset. Reports carry no message texts or keys. |
+| `SENTRY_ENVIRONMENT` | Environment name in reports; defaults to `NODE_ENV`.                                                          |
+| `SENTRY_RELEASE`     | Release name in reports; defaults to `support-agent@<APP_VERSION>`.                                           |
+
+`APP_VERSION` is set by release images; the overview page shows it.
+
+## Development only
+
+`WEB_DIST_DIR` and `MIGRATIONS_DIR` override where the built web app and the
+migrations are found. `SLACK_API_URL` replaces Slack's Web API base URL, for
+tests against a stand-in. `NODE_ENV` is `production` in the image.
