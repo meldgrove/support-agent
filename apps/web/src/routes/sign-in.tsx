@@ -36,11 +36,21 @@ const searchSchema = z.object({
   error: z.string().optional().catch(undefined),
 });
 
-/** Only same-site paths, never another origin. */
+/** Only paths of this app, never another origin. */
 export function safeRedirect(target: string | undefined): string {
-  return target && target.startsWith("/") && !target.startsWith("//") && !target.startsWith("/sign-in")
-    ? target
-    : "/";
+  if (!target?.startsWith("/")) return "/";
+  // Parsed the way browsers parse it: they read "//host" and "/\host" as another site.
+  let url: URL;
+  try {
+    url = new URL(target, window.location.origin);
+  } catch {
+    return "/";
+  }
+  // "/.//host" normalizes to "//host", which is another site again.
+  const { pathname } = url;
+  if (url.origin !== window.location.origin || pathname.startsWith("//") || pathname.startsWith("/sign-in"))
+    return "/";
+  return pathname + url.search + url.hash;
 }
 
 function SignInPage() {
