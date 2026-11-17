@@ -20,6 +20,10 @@ process with a list of the problems.
 | `OIDC_CLIENT_ID`     | Client ID at that provider.                                                                                                                              |
 | `OIDC_CLIENT_SECRET` | Client secret at that provider.                                                                                                                          |
 
+The `AUTH_SECRET` and `ENCRYPTION_KEY` of `.env.example` are public. The
+process refuses them unless it runs for development on this machine
+(`NODE_ENV` is not `production` and `APP_URL` is a `localhost` address).
+
 ## Sign-in
 
 | Variable             | Default                | Description                                                                                            |
