@@ -118,4 +118,15 @@ describe("searchSource", () => {
     expect((error as SearchError).message).toBe("The search API answered 500");
     expect((fetchMock.mock.calls[0]![1]!.headers as Record<string, string>).authorization).toBe("Bearer abc");
   });
+
+  it("stops reading a response larger than 5 MB", async () => {
+    const endless = new ReadableStream<Uint8Array>({
+      pull: (controller) => controller.enqueue(new Uint8Array(1024 * 1024)),
+    });
+    fetchMock.mockResolvedValueOnce(new Response(endless, { status: 200 }));
+    const source = { id: "s3", name: "KB", config: { ...DEFAULT_SEARCH_API_CONFIG }, secret: "abc" };
+    await expect(searchSource(source, "x")).rejects.toThrow(
+      "The response of the search API is larger than 5 MB",
+    );
+  });
 });
