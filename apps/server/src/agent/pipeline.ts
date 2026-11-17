@@ -19,7 +19,7 @@ import {
   TRIAGE_JSON_SCHEMA,
   triageSystemPrompt,
 } from "./prompts";
-import { escapeMrkdwn, markdownToMrkdwn, sourcesLine } from "./slack-format";
+import { escapeMrkdwn, linkableUrls, markdownToMrkdwn, sourcesLine } from "./slack-format";
 
 export type ModelTarget = { connection: ProviderConnection; model: string };
 
@@ -265,7 +265,8 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
       result.outcome = "answered";
       const cited = result.sources.filter((source) => result.citedRefs.includes(source.ref));
       const links = sourcesLine(cited);
-      result.slackText = [markdownToMrkdwn(answer.answer), links].filter(Boolean).join("\n\n");
+      const linkable = linkableUrls(result.sources, input.agent.instructions);
+      result.slackText = [markdownToMrkdwn(answer.answer, linkable), links].filter(Boolean).join("\n\n");
     } else {
       result.outcome = "no_answer";
       result.citedRefs = [];

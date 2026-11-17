@@ -134,6 +134,26 @@ describe("runPipeline", () => {
     expect(calls[1]!.request.system).toContain("Answer IT questions.");
   });
 
+  it("links only URLs from the passages or the instructions", async () => {
+    fakeModels({
+      Main: {
+        triage: { respond: true, reason: "Password question", searchQueries: ["reset password"] },
+        answer: {
+          status: "answered",
+          answer:
+            "Use [the portal](https://it.example.org/password/), [Wi-Fi](https://it.example.org/wifi) or [the helpdesk](https://help.example.org/new). Not [this](https://attacker.example/login).",
+          citedRefs: ["S1"],
+        },
+      },
+    });
+    const result = await runPipeline(
+      input({ agent: agent({ instructions: "Tickets: https://help.example.org/new." }) }),
+    );
+    expect(result.slackText).toBe(
+      "Use <https://it.example.org/password/|the portal>, <https://it.example.org/wifi|Wi-Fi> or <https://help.example.org/new|the helpdesk>. Not this.\n\n:page_facing_up: <https://it.example.org/password|Reset your password>",
+    );
+  });
+
   it("posts the escalation message when nothing answers the question", async () => {
     fakeModels({
       Main: {

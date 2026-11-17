@@ -6,11 +6,43 @@ export function escapeMrkdwn(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function convertInline(text: string): string {
+/** URLs in a text, without trailing punctuation or markup (`**url**`, `<url|label>`). */
+function urlsIn(text: string): string[] {
+  return [...text.matchAll(/https?:\/\/[^\s<>"'`()[\]|]+/gi)].map((match) =>
+    match[0].replace(/[.,;:!?*_~]+$/, ""),
+  );
+}
+
+/** The URLs an answer may link to: the passages' own, and those in their texts and in the instructions. */
+export function linkableUrls(
+  sources: { url: string | null; text: string }[],
+  instructions: string,
+): string[] {
+  const urls = sources.flatMap((source) => [...(source.url ? [source.url] : []), ...urlsIn(source.text)]);
+  return [...urls, ...urlsIn(instructions)];
+}
+
+/** Undoes HTML escaping of &, < and >, however often it was applied (Slack's, or a passage's own). */
+function unescapeHtml(text: string): string {
+  let result = text;
+  for (let previous = ""; previous !== result;) {
+    previous = result;
+    result = result.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  }
+  return result;
+}
+
+/** A URL as compared with the linkable ones: unescaped, without trailing slashes. */
+const linkKey = (url: string) => unescapeHtml(url).replace(/\/+$/, "");
+
+function convertInline(text: string, linkable: ReadonlySet<string>): string {
   let result = escapeMrkdwn(text);
-  // Links first, so their labels keep any emphasis.
+  // Links first, so their labels keep any emphasis. Only URLs from the
+  // passages or the instructions become links; any other link the model
+  // writes (made up, or asked for in a message) keeps only its label.
   result = result.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label: string, url: string) => {
-    return `<${url}|${label.replace(/\|/g, "/")}>`;
+    const target = unescapeHtml(url);
+    return linkable.has(linkKey(target)) ? `<${escapeMrkdwn(target)}|${label.replace(/\|/g, "/")}>` : label;
   });
   const BOLD = "\u0001";
   result = result.replace(/\*\*(.+?)\*\*/g, `${BOLD}$1${BOLD}`).replace(/__(.+?)__/g, `${BOLD}$1${BOLD}`);
@@ -20,7 +52,9 @@ function convertInline(text: string): string {
   return result;
 }
 
-export function markdownToMrkdwn(markdown: string): string {
+/** Slack mrkdwn from the model's Markdown; links only to `linkable` URLs (see `linkableUrls`). */
+export function markdownToMrkdwn(markdown: string, linkable: Iterable<string>): string {
+  const allowed = new Set([...linkable].map(linkKey));
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const output: string[] = [];
   let inCode = false;
@@ -36,12 +70,12 @@ export function markdownToMrkdwn(markdown: string): string {
     }
     const heading = /^\s{0,3}#{1,6}\s+(.*)$/.exec(line);
     if (heading) {
-      output.push(`*${convertInline(heading[1]!.replace(/\*\*/g, ""))}*`);
+      output.push(`*${convertInline(heading[1]!.replace(/\*\*/g, ""), allowed)}*`);
       continue;
     }
     const bullet = /^(\s*)[-*+]\s+(.*)$/.exec(line);
     if (bullet) {
-      output.push(`${bullet[1]}• ${convertInline(bullet[2]!)}`);
+      output.push(`${bullet[1]}• ${convertInline(bullet[2]!, allowed)}`);
       continue;
     }
     // Inline code keeps its content unchanged.
@@ -51,7 +85,7 @@ export function markdownToMrkdwn(markdown: string): string {
         .map((part) =>
           part.startsWith("`") && part.endsWith("`") && part.length > 1
             ? escapeMrkdwn(part)
-            : convertInline(part),
+            : convertInline(part, allowed),
         )
         .join(""),
     );
