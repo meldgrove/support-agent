@@ -2,6 +2,7 @@ import type { WebClient } from "@slack/web-api";
 import type { ImageInput } from "../llm";
 import { cleanSlackText } from "../agent/slack-format";
 import type { ThreadMessage } from "../agent/pipeline";
+import { readLimited } from "../core/read-limited";
 
 /** What the bot does in Slack. An interface, so the message handling can be tested without Slack. */
 export interface SlackPort {
@@ -117,8 +118,8 @@ export function webSlackPort(client: WebClient, botToken: string): SlackPort {
         const type = response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
         // Without files:read Slack answers with its sign-in page instead of the file.
         if (!response.ok || !IMAGE_TYPES.has(type)) return null;
-        const bytes = Buffer.from(await response.arrayBuffer());
-        if (bytes.length > MAX_IMAGE_BYTES) return null;
+        const bytes = await readLimited(response, MAX_IMAGE_BYTES);
+        if (!bytes) return null;
         return { mediaType: type as ImageInput["mediaType"], data: bytes.toString("base64") };
       } catch {
         return null;

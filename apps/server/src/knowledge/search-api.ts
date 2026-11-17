@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { SearchApiConfig, SearchResult } from "@support-agent/shared/api/knowledge";
+import { readLimited } from "../core/read-limited";
 
 /** A knowledge source as the bot uses it: config plus the decrypted secret. */
 export type SourceConnection = {
@@ -21,6 +22,21 @@ export class SearchError extends Error {
 
 const SEARCH_TIMEOUT_MS = 20_000;
 const MAX_TEXT_LENGTH = 4_000;
+/** Longest response read from a search API or token URL. */
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+
+/** A JSON response of at most MAX_RESPONSE_BYTES; null when it is not JSON. */
+async function readJson(response: Response, what: string): Promise<unknown> {
+  const body = await readLimited(response, MAX_RESPONSE_BYTES).catch(() => {
+    throw new SearchError(`Could not read the response of the ${what}`);
+  });
+  if (!body) throw new SearchError(`The response of the ${what} is larger than 5 MB`);
+  try {
+    return JSON.parse(body.toString("utf8"));
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The request body: the template's JSON with every string `"{{query}}"`
@@ -119,7 +135,7 @@ async function accessToken(source: SourceConnection, refresh: boolean): Promise<
     throw new SearchError("Could not reach the token URL");
   }
   if (!response.ok) throw new SearchError(`The token URL answered ${response.status}`, response.status);
-  const payload = (await response.json().catch(() => null)) as {
+  const payload = (await readJson(response, "token URL")) as {
     access_token?: unknown;
     expires_in?: unknown;
   } | null;
@@ -160,9 +176,8 @@ export async function searchSource(source: SourceConnection, query: string): Pro
   if (response.status === 401 && source.config.auth === "oauth2_client_credentials")
     response = await send(true);
   if (!response.ok) throw new SearchError(`The search API answered ${response.status}`, response.status);
-  const payload: unknown = await response.json().catch(() => {
-    throw new SearchError("The search API did not return JSON");
-  });
+  const payload = await readJson(response, "search API");
+  if (payload === null) throw new SearchError("The search API did not return JSON");
   return mapResults(payload, source.config);
 }
 

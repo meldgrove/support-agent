@@ -51,6 +51,9 @@ agent's channels.
 
 ## The response
 
+The bot reads at most 5 MB of a response (search or token URL); a longer
+one fails the search.
+
 The **response mapping** says where the bot finds the passages in the JSON
 response, as dotted paths:
 

@@ -48,4 +48,16 @@ describe("downloadImage", () => {
     ).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("stops reading an image larger than 5 MB", async () => {
+    const endless = new ReadableStream<Uint8Array>({
+      pull: (controller) => controller.enqueue(new Uint8Array(1024 * 1024)),
+    });
+    fetchMock.mockResolvedValueOnce(new Response(endless, { headers: { "content-type": "image/png" } }));
+    const result = await port.downloadImage({
+      ...image,
+      url_private: "https://files.slack.com/files-pri/T1-F1/a.png",
+    });
+    expect(result).toBeNull();
+  });
 });
