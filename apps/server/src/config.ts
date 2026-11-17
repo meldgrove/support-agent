@@ -94,7 +94,8 @@ const schema = z
   .superRefine((value, ctx) => {
     // A .env copied from .env.example may still say NODE_ENV=development, so
     // a public APP_URL counts as production too.
-    const local = LOCAL_HOSTS.has(new URL(value.APP_URL).hostname);
+    // An invalid APP_URL has its own issue; refinements run despite it.
+    const local = LOCAL_HOSTS.has(URL.parse(value.APP_URL)?.hostname ?? "");
     if (value.NODE_ENV === "production" || !local) {
       for (const key of ["AUTH_SECRET", "ENCRYPTION_KEY"] as const) {
         if (EXAMPLE_SECRETS[key].includes(value[key])) {

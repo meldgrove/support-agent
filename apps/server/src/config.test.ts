@@ -46,6 +46,12 @@ describe("example secrets", () => {
     ).toThrow(/AUTH_SECRET: Replace the example value[\s\S]*ENCRYPTION_KEY: Replace the example value/);
   });
 
+  it("leave an invalid APP_URL to the configuration summary", () => {
+    expect(configWith({ NODE_ENV: "development", APP_URL: "not a url", ...examples })).toThrow(
+      /Invalid configuration:[\s\S]*APP_URL:/,
+    );
+  });
+
   it("are allowed for development on this machine", () => {
     expect(
       configWith({ NODE_ENV: "development", APP_URL: "http://localhost:5173", ...examples })().APP_URL,
