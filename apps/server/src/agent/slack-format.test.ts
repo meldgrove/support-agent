@@ -69,6 +69,12 @@ describe("linkableUrls", () => {
       "https://help.example.org/new",
     ]);
   });
+
+  it("leaves Markdown and Slack markup around a URL out", () => {
+    expect(
+      linkableUrls([], "See **https://help.example.org/new** or <https://wiki.example.org/vpn|the wiki>."),
+    ).toEqual(["https://help.example.org/new", "https://wiki.example.org/vpn"]);
+  });
 });
 
 describe("sourcesLine", () => {

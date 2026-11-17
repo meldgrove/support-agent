@@ -6,10 +6,10 @@ export function escapeMrkdwn(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** URLs in a text, without trailing punctuation. */
+/** URLs in a text, without trailing punctuation or markup (`**url**`, `<url|label>`). */
 function urlsIn(text: string): string[] {
-  return [...text.matchAll(/https?:\/\/[^\s<>"'`()[\]]+/gi)].map((match) =>
-    match[0].replace(/[.,;:!?]+$/, ""),
+  return [...text.matchAll(/https?:\/\/[^\s<>"'`()[\]|]+/gi)].map((match) =>
+    match[0].replace(/[.,;:!?*_~]+$/, ""),
   );
 }
 
