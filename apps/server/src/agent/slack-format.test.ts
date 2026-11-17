@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanSlackText, markdownToMrkdwn, sourcesLine } from "./slack-format";
+import { alertText, cleanSlackText, markdownToMrkdwn, sourcesLine } from "./slack-format";
 
 describe("markdownToMrkdwn", () => {
   it("converts emphasis, links, headings and lists", () => {
@@ -55,5 +55,13 @@ describe("cleanSlackText", () => {
         "UBOT",
       ),
     ).toBe("how do I join #general? See this (https://x.example.org) & @here");
+  });
+});
+
+describe("alertText", () => {
+  it("keeps the agent name and the error plain text", () => {
+    expect(alertText("<!channel> IT", "C123", "Search failed: <@U1> & co")).toBe(
+      ":warning: *&lt;!channel&gt; IT* could not answer in <#C123>: Search failed: &lt;@U1&gt; &amp; co",
+    );
   });
 });

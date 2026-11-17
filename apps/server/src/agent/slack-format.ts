@@ -62,6 +62,11 @@ export function markdownToMrkdwn(markdown: string): string {
     .trim();
 }
 
+/** The alert channel's message about an agent that could not answer; name and error stay plain text. */
+export function alertText(agentName: string, channelId: string, error: string): string {
+  return `:warning: *${escapeMrkdwn(agentName)}* could not answer in <#${channelId}>: ${escapeMrkdwn(error)}`;
+}
+
 /** One line with links to the cited sources, e.g. ":page_facing_up: <url|Title> · <url|Title>". */
 export function sourcesLine(sources: { title: string; url: string | null }[]): string | null {
   const seen = new Set<string>();
