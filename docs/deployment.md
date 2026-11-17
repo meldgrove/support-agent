@@ -89,7 +89,8 @@ account is gone.
 The support agent trusts the provider's email address: whoever signs in at
 the provider with an address on the list gets that person's access. Use your
 organization's own provider, where people cannot choose or change their
-address themselves (no open self-registration).
+address themselves (no open self-registration). When the provider says an
+address is not verified (`email_verified: false`), sign-in fails.
 
 ## Health checks
 

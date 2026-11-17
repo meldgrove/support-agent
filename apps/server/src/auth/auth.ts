@@ -9,6 +9,27 @@ import { CLIENT_IP_HEADER } from "../http/client-ip";
 import { logger } from "../logger";
 
 /**
+ * Sign-in links a person by email address, so the provider must vouch for
+ * it: when its profile says the address is not verified (for example after
+ * open self-registration without confirmation), sign-in fails. Providers that
+ * send no `email_verified` claim, such as Microsoft Entra ID, are not affected.
+ */
+export function rejectUnverifiedEmail({
+  source,
+}: {
+  source: { oauth?: { profile?: Record<string, unknown> } };
+}) {
+  const verified = source.oauth?.profile?.email_verified;
+  if (verified === false || verified === "false") {
+    return {
+      error: "email_not_verified",
+      errorDescription: "The provider has not verified this email address",
+    };
+  }
+  return undefined;
+}
+
+/**
  * Sign-in only through the OpenID Connect provider. Nobody can sign up: a
  * person signs in when an admin added their email address (or it is in
  * ADMIN_EMAILS) and the account is active.
@@ -39,6 +60,8 @@ function createAuth() {
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
     emailAndPassword: { enabled: false },
+    // Runs when a provider account is linked and at every sign-in with it.
+    user: { validateUserInfo: rejectUnverifiedEmail },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
