@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alertText, cleanSlackText, markdownToMrkdwn, sourcesLine } from "./slack-format";
+import { alertText, cleanSlackText, linkableUrls, markdownToMrkdwn, sourcesLine } from "./slack-format";
 
 describe("markdownToMrkdwn", () => {
   it("converts emphasis, links, headings and lists", () => {
@@ -9,7 +9,7 @@ describe("markdownToMrkdwn", () => {
       "- Go to [the portal](https://it.example.org/reset)",
       "1. Done",
     ].join("\n");
-    expect(markdownToMrkdwn(markdown)).toBe(
+    expect(markdownToMrkdwn(markdown, ["https://it.example.org/reset"])).toBe(
       [
         "*Reset your password*",
         "Open *Settings* and choose _Security_.",
@@ -20,14 +20,54 @@ describe("markdownToMrkdwn", () => {
   });
 
   it("escapes Slack control characters and keeps code unchanged", () => {
-    expect(markdownToMrkdwn("Use a < b & c > d and `**raw**`")).toBe(
+    expect(markdownToMrkdwn("Use a < b & c > d and `**raw**`", [])).toBe(
       "Use a &lt; b &amp; c &gt; d and `**raw**`",
     );
-    expect(markdownToMrkdwn("```\n**x**\n```")).toBe("```\n**x**\n```");
+    expect(markdownToMrkdwn("```\n**x**\n```", [])).toBe("```\n**x**\n```");
   });
 
   it("does not turn non-http links into Slack links", () => {
-    expect(markdownToMrkdwn("[x](javascript:alert(1))")).toBe("[x](javascript:alert(1))");
+    expect(markdownToMrkdwn("[x](javascript:alert(1))", [])).toBe("[x](javascript:alert(1))");
+  });
+
+  it("keeps only links to linkable URLs; other links become their label", () => {
+    expect(
+      markdownToMrkdwn(
+        "Open [the form](https://it.example.org/form?a=1&b=2/) or [this](https://x.example/)",
+        ["https://it.example.org/form?a=1&b=2"],
+      ),
+    ).toBe("Open <https://it.example.org/form?a=1&amp;b=2/|the form> or this");
+  });
+
+  it("compares URLs without their HTML escaping", () => {
+    expect(
+      markdownToMrkdwn("[portal](https://example.org/?a=1&amp;b=2)", ["https://example.org/?a=1&b=2"]),
+    ).toBe("<https://example.org/?a=1&amp;b=2|portal>");
+    expect(
+      markdownToMrkdwn("[portal](https://example.org/?a=1&b=2)", ["https://example.org/?a=1&amp;b=2"]),
+    ).toBe("<https://example.org/?a=1&amp;b=2|portal>");
+  });
+});
+
+describe("linkableUrls", () => {
+  it("collects the passages' URLs, URLs in their texts and in the instructions", () => {
+    expect(
+      linkableUrls(
+        [
+          {
+            url: "https://it.example.org/a",
+            text: "See https://wiki.example.org/vpn. Or (https://it.example.org/b)",
+          },
+          { url: null, text: "No links." },
+        ],
+        "Tickets: https://help.example.org/new, please.",
+      ),
+    ).toEqual([
+      "https://it.example.org/a",
+      "https://wiki.example.org/vpn",
+      "https://it.example.org/b",
+      "https://help.example.org/new",
+    ]);
   });
 });
 

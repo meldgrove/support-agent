@@ -55,9 +55,11 @@ status are tables.
    or reports that they don't answer the question.
 7. **Post** in the thread: the answer converted to Slack mrkdwn, plus links
    to the cited passages. The model never writes links of its own into that
-   line. Without an answer, the agent posts its escalation message or stays
-   silent; on errors it posts the error message from the settings and
-   alerts the alert channel.
+   line. Links in the answer stay links only when their URL appears in the
+   passages or the instructions; others keep just their text. Without an
+   answer, the agent posts its escalation message or stays silent; on
+   errors it posts the error message from the settings and alerts the alert
+   channel.
 8. **Update the exchange** with outcome, sources, model, tokens and timing.
 
 The test console and saved tests run steps 4 to 7 through the same code
