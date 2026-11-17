@@ -28,6 +28,8 @@ export interface SlackPort {
 export type SlackFile = {
   mimetype?: string;
   size?: number;
+  /** Hosted outside Slack (e.g. Google Drive): its URLs lead elsewhere. */
+  is_external?: boolean;
   url_private?: string;
   url_private_download?: string;
 };
@@ -42,6 +44,20 @@ function slackError(error: unknown): string {
 
 export function isReadableImage(file: SlackFile): boolean {
   return Boolean(file.mimetype && IMAGE_TYPES.has(file.mimetype) && (file.size ?? 0) <= MAX_IMAGE_BYTES);
+}
+
+/**
+ * Whether a file URL is Slack's own. Only those get the bot token: the URL
+ * comes from the message, and a file hosted elsewhere would send the token
+ * to that host.
+ */
+export function isSlackFileUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && (url.hostname === "slack.com" || url.hostname.endsWith(".slack.com"));
+  } catch {
+    return false;
+  }
 }
 
 export function webSlackPort(client: WebClient, botToken: string): SlackPort {
@@ -92,7 +108,7 @@ export function webSlackPort(client: WebClient, botToken: string): SlackPort {
     },
     async downloadImage(file) {
       const url = file.url_private_download ?? file.url_private;
-      if (!url || !isReadableImage(file)) return null;
+      if (!url || file.is_external || !isSlackFileUrl(url) || !isReadableImage(file)) return null;
       try {
         const response = await fetch(url, {
           headers: { authorization: `Bearer ${botToken}` },
