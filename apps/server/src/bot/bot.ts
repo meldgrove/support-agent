@@ -9,6 +9,7 @@ import { getDb } from "../db/client";
 import { botStatus } from "../db/schema";
 import { logger } from "../logger";
 import type { AgentRuntime } from "../agent/pipeline";
+import { alertText } from "../agent/slack-format";
 import { slackApiUrl, slackLogger, webClient } from "../slack/web";
 import { ConfigStore, type BotConfig } from "./config-store";
 import { handleMessage, handleReaction, type MessageEvent, type ReactionEvent } from "./handler";
@@ -225,7 +226,7 @@ export class Bot {
       .postMessage({
         channel: target,
         threadTs: null,
-        text: `:warning: *${agent.name}* could not answer in <#${channel}>: ${message}`,
+        text: alertText(agent.name, channel, message),
         username: null,
         iconUrl: null,
       })
