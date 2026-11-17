@@ -20,7 +20,15 @@ const flag = (fallback: boolean) =>
     z.boolean().default(fallback),
   );
 
-const EXAMPLE_SECRET = "change-me-to-a-long-random-value";
+/**
+ * Secrets published in .env.example (and earlier versions of it). Anyone can
+ * read them, so they are allowed only for development on this machine.
+ */
+const EXAMPLE_SECRETS = {
+  AUTH_SECRET: ["change-me-to-a-long-random-value", "development-secret-development-secret"],
+  ENCRYPTION_KEY: ["ZGV2ZWxvcG1lbnQta2V5LWRldmVsb3BtZW50LWtleSE="],
+};
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 const schema = z
   .object({
@@ -84,8 +92,20 @@ const schema = z
     SENTRY_RELEASE: optional(z.string().max(200)),
   })
   .superRefine((value, ctx) => {
-    if (value.NODE_ENV === "production" && value.AUTH_SECRET === EXAMPLE_SECRET) {
-      ctx.addIssue({ code: "custom", path: ["AUTH_SECRET"], message: "Replace the example value" });
+    // A .env copied from .env.example may still say NODE_ENV=development, so
+    // a public APP_URL counts as production too.
+    // An invalid APP_URL has its own issue; refinements run despite it.
+    const local = LOCAL_HOSTS.has(URL.parse(value.APP_URL)?.hostname ?? "");
+    if (value.NODE_ENV === "production" || !local) {
+      for (const key of ["AUTH_SECRET", "ENCRYPTION_KEY"] as const) {
+        if (EXAMPLE_SECRETS[key].includes(value[key])) {
+          ctx.addIssue({
+            code: "custom",
+            path: [key],
+            message: "Replace the example value: openssl rand -base64 32",
+          });
+        }
+      }
     }
     const key = Buffer.from(value.ENCRYPTION_KEY, "base64");
     if (key.length !== 32) {
