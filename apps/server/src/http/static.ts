@@ -12,6 +12,9 @@ export function webApp() {
   const root = config().WEB_DIST_DIR ?? path.resolve(SERVER_ROOT, "../web/dist");
   const relativeRoot = path.relative(process.cwd(), root) || ".";
   const app = new Hono<AppEnv>();
+  // Source maps hold the app's source; release builds upload them to the
+  // error reporting service, which needs no public copy.
+  app.use("/assets/*", async (c, next) => (c.req.path.endsWith(".map") ? c.notFound() : next()));
   app.use(
     "/assets/*",
     serveStatic({
