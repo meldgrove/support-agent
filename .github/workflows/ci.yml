@@ -40,7 +40,10 @@ jobs:
             exit 1
           fi
       - run: npm run build
-      - run: npm audit --omit=dev --audit-level=high
+      # High and critical advisories in the production dependencies fail CI.
+      # Those without a fix that do not affect the app are listed, with a
+      # date, in the script.
+      - run: node scripts/audit.mjs
 
   integration:
     name: Integration tests (PostgreSQL 18)
