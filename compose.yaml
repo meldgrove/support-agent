@@ -93,8 +93,10 @@ services:
       start_period: 60s
 
   # Automatic updates (docs/deployment.md): off until UPDATE_DEPLOY_HOOK_URL
-  # is set. When the tag in SUPPORT_AGENT_VERSION points to a new image, it
-  # calls that deploy link, and the platform deploys the new release.
+  # is set (Coolify) or the server watches the volume `updater` (Debian:
+  # `updater host-setup`). When the tag in SUPPORT_AGENT_VERSION points to a
+  # new image, it calls that deploy link or leaves a request in the volume,
+  # and Coolify or the server deploys the new release.
   updater:
     image: ghcr.io/meldgrove/updater:0.1
     pull_policy: ${PULL_POLICY:-missing}
@@ -112,3 +114,8 @@ services:
       # read:packages.
       REGISTRY_USERNAME: ${UPDATE_REGISTRY_USERNAME:-}
       REGISTRY_PASSWORD: ${UPDATE_REGISTRY_PASSWORD:-}
+    volumes:
+      - updater:/trigger
+
+volumes:
+  updater:

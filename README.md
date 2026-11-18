@@ -46,8 +46,8 @@ admin interface ──▶ PostgreSQL ◀── bot reloads agents and settings o
 
 ## Documentation
 
-- [Deployment](docs/deployment.md): run it with Docker Compose, sign-in,
-  upgrades, backups.
+- [Deployment](docs/deployment.md): run it on Coolify or a Debian server,
+  sign-in, upgrades, automatic updates, backups.
 - [Configuration](docs/configuration.md): every environment variable.
 - [Admin guide](docs/admin-guide.md): connect Slack, add providers and
   knowledge sources, set up and test agents.
