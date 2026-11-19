@@ -106,10 +106,17 @@ describe("buttonState", () => {
         }),
       ),
     ).toEqual({ kind: "installing", version: "0.2.1", stage: "pulling", slow: false });
-    expect(stateOf(reachable({ mode: "off", automatic: false, available: update("0.2.1") }))).toEqual({
-      kind: "off",
+    // Mode off still shows what is new; "off" only when nothing is.
+    const off = { mode: "off", automatic: false } as const;
+    expect(stateOf(reachable({ ...off, available: update("0.2.1") }))).toMatchObject({
+      kind: "available",
       update: update("0.2.1"),
     });
+    expect(stateOf(reachable({ ...off, attention: update("0.3.0") }))).toEqual({
+      kind: "attention",
+      update: update("0.3.0"),
+    });
+    expect(stateOf(reachable(off))).toEqual({ kind: "off" });
   });
 
   it("shows a failure while the failed version is still offered", () => {

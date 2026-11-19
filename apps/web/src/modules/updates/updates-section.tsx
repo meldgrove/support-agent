@@ -23,7 +23,7 @@ import { useSetUpdateChannel, useUpdates } from "./api";
 import { messages } from "./messages";
 import { parseCooldown, parseWindow } from "./state";
 
-const DEPLOYMENT_GUIDE =
+export const DEPLOYMENT_GUIDE =
   "https://github.com/meldgrove/support-agent/blob/main/docs/deployment.md#automatic-updates";
 
 type T = ReturnType<typeof useT<typeof messages.en>>;

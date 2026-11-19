@@ -205,9 +205,10 @@ for updates on click, lists the changes of an available update with a link
 to its release notes, installs it on request (**Install now**), shows the
 progress, and says why an installation failed. The page reloads once the
 new version runs. A release with upgrade steps installs only with **Install
-anyway…**: take the steps first. **Settings → Updates** shows the installed
-version, the channel (on Debian, admins choose it there) and when updates
-install by themselves.
+anyway…**: take the steps first. With automatic updates off on the server,
+the button still shows new releases, but nothing installs from the app.
+**Settings → Updates** shows the installed version, the channel (on Debian,
+admins choose it there) and when updates install by themselves.
 
 Without the `updater` service, the button says that there is no update
 service; `UPDATER_URL` ([Configuration](configuration.md#updates)) points

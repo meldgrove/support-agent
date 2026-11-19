@@ -16,6 +16,7 @@ import { useFormatter } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useCheckUpdates, useInstallUpdate, useUpdates } from "./api";
 import { messages } from "./messages";
+import { DEPLOYMENT_GUIDE } from "./updates-section";
 import {
   buttonState,
   installOutcome,
@@ -176,6 +177,7 @@ function AdminUpdateButton() {
                 t={t}
                 appName={appName}
                 installedVersion={installedVersion}
+                installable={status?.mode !== "off"}
                 onInstall={askInstall}
               />
               <Separator />
@@ -223,8 +225,6 @@ function hasPopoverContent(state: ButtonState): boolean {
     case "failed":
     case "installing":
       return true;
-    case "off":
-      return state.update !== null;
     default:
       return false;
   }
@@ -334,6 +334,8 @@ function PopoverBody(props: {
   t: T;
   appName: string;
   installedVersion: string | null;
+  /** False in mode off: the popover shows the update, but nothing can install from here. */
+  installable: boolean;
   onInstall: (update: Update, attention: boolean) => void;
 }) {
   const { state, t } = props;
@@ -342,26 +344,29 @@ function PopoverBody(props: {
       return (
         <>
           <UpdateDetails update={state.update} t={t} title={t("available")} />
-          <Button size="sm" onClick={() => props.onInstall(state.update, false)}>
-            <Download />
-            {t("installNow")}
-          </Button>
+          {props.installable ? (
+            <Button size="sm" onClick={() => props.onInstall(state.update, false)}>
+              <Download />
+              {t("installNow")}
+            </Button>
+          ) : (
+            <OffNote t={t} />
+          )}
           {state.attention ? (
             <>
               <Separator />
-              <AttentionBody update={state.attention} t={t} onInstall={props.onInstall} />
+              <AttentionBody
+                update={state.attention}
+                t={t}
+                onInstall={props.installable ? props.onInstall : null}
+              />
             </>
           ) : null}
         </>
       );
     case "attention":
-      return <AttentionBody update={state.update} t={t} onInstall={props.onInstall} />;
-    case "off":
       return (
-        <>
-          {state.update ? <UpdateDetails update={state.update} t={t} title={t("available")} /> : null}
-          <p className="text-muted-foreground">{t("off")}</p>
-        </>
+        <AttentionBody update={state.update} t={t} onInstall={props.installable ? props.onInstall : null} />
       );
     case "failed":
       return (
@@ -372,10 +377,14 @@ function PopoverBody(props: {
           </p>
           {state.message ? <p className="text-muted-foreground break-words">{state.message}</p> : null}
           {props.installedVersion ? <p>{t("stillRunning", { version: props.installedVersion })}</p> : null}
-          <Button size="sm" variant="outline" onClick={() => props.onInstall(state.update, false)}>
-            <RefreshCw />
-            {t("tryAgain")}
-          </Button>
+          {props.installable ? (
+            <Button size="sm" variant="outline" onClick={() => props.onInstall(state.update, false)}>
+              <RefreshCw />
+              {t("tryAgain")}
+            </Button>
+          ) : (
+            <OffNote t={t} />
+          )}
         </div>
       );
     case "installing":
@@ -407,10 +416,30 @@ function PopoverBody(props: {
   }
 }
 
+/** In mode off, in place of the install buttons: nothing can install from here. */
+function OffNote({ t }: { t: T }) {
+  const [before, after] = t("offCannotInstall").split("{guide}");
+  return (
+    <p className="text-muted-foreground">
+      {before}
+      <a
+        href={DEPLOYMENT_GUIDE}
+        target="_blank"
+        rel="noreferrer"
+        className="text-foreground font-medium underline-offset-4 hover:underline"
+      >
+        {t("deploymentGuide")}
+      </a>
+      {after}
+    </p>
+  );
+}
+
 function AttentionBody(props: {
   update: Update;
   t: T;
-  onInstall: (update: Update, attention: boolean) => void;
+  /** null in mode off: nothing can install from here. */
+  onInstall: ((update: Update, attention: boolean) => void) | null;
 }) {
   const { update, t } = props;
   return (
@@ -421,9 +450,13 @@ function AttentionBody(props: {
       </p>
       <p className="text-muted-foreground">{t("attentionText")}</p>
       <ReleaseNotesLink url={update.url} t={t} />
-      <Button size="sm" variant="outline" onClick={() => props.onInstall(update, true)}>
-        {t("installAnyway")}
-      </Button>
+      {props.onInstall ? (
+        <Button size="sm" variant="outline" onClick={() => props.onInstall?.(update, true)}>
+          {t("installAnyway")}
+        </Button>
+      ) : (
+        <OffNote t={t} />
+      )}
     </div>
   );
 }

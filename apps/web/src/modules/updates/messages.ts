@@ -43,6 +43,8 @@ export const messages = defineMessages({
     stable: "Stable",
     preview: "Preview",
     off: "Automatic updates are off on this server",
+    offCannotInstall:
+      "Automatic updates are off on this server, so it cannot install from here. See the {guide}.",
     unreachable: "No update service. See the deployment guide.",
     channel: "Channel",
     recommended: "recommended",
@@ -111,6 +113,8 @@ export const messages = defineMessages({
     stable: "Stabil",
     preview: "Vorschau",
     off: "Automatische Updates sind auf diesem Server aus",
+    offCannotInstall:
+      "Automatische Updates sind auf diesem Server aus, daher kann es hier nicht installiert werden. Siehe {guide}.",
     unreachable: "Kein Update-Dienst. Siehe Anleitung zum Deployment.",
     channel: "Kanal",
     recommended: "empfohlen",

@@ -31,10 +31,11 @@ describe("the button with the real answers of Updater 0.2", () => {
     for (const raw of Object.values(samples)) expect(updaterStatusSchema.safeParse(raw).success).toBe(true);
   });
 
-  it("shows off for mode off, where nothing can install, with the available release", () => {
+  it("shows the update in mode off too (the popover installs nothing there)", () => {
     expect(stateOf("status-off-available-attention")).toMatchObject({
-      kind: "off",
+      kind: "available",
       update: { version: "0.2.1" },
+      attention: { version: "0.3.1" },
     });
   });
 

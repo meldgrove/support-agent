@@ -33,7 +33,8 @@ export type ButtonState =
       slow: boolean;
     }
   | { kind: "checking" }
-  | { kind: "off"; update: Update | null }
+  /** Mode off with nothing new; with something new, mode off shows it without installing. */
+  | { kind: "off" }
   | { kind: "failed"; version: string; message: string | null; update: Update }
   | { kind: "available"; update: Update; attention: Update | null }
   | { kind: "attention"; update: Update }
@@ -70,7 +71,6 @@ export function buttonState(input: {
     };
   }
   if (input.checking || status.checking) return { kind: "checking" };
-  if (status.mode === "off") return { kind: "off", update: status.available ?? status.attention };
   const last = status.last;
   if (last && (last.result === "failed" || last.result === "rolled-back")) {
     const update = [status.available, status.attention].find(
@@ -81,7 +81,7 @@ export function buttonState(input: {
   }
   if (status.available) return { kind: "available", update: status.available, attention: status.attention };
   if (status.attention) return { kind: "attention", update: status.attention };
-  return { kind: "current" };
+  return status.mode === "off" ? { kind: "off" } : { kind: "current" };
 }
 
 /** Whether the installation the page waits for has ended, from the latest answer. */
