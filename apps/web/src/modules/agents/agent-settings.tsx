@@ -10,9 +10,9 @@ import {
   type AgentInput,
 } from "@support-agent/shared/api/agents";
 import { PROVIDER_LABELS } from "@support-agent/shared/api/providers";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@meldgrove/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@meldgrove/ui/card";
+import { Checkbox } from "@meldgrove/ui/checkbox";
 import {
   Field,
   FieldContent,
@@ -22,15 +22,15 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
+} from "@meldgrove/ui/field";
+import { Input } from "@meldgrove/ui/input";
+import { RadioGroup, RadioGroupItem } from "@meldgrove/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@meldgrove/ui/select";
+import { Skeleton } from "@meldgrove/ui/skeleton";
+import { Switch } from "@meldgrove/ui/switch";
+import { Textarea } from "@meldgrove/ui/textarea";
 import { ModelCombobox } from "@/components/model-combobox";
-import { ErrorState } from "@/components/states";
+import { ErrorState } from "@meldgrove/ui/states";
 import { useIsAdmin } from "@/hooks/use-me";
 import { useT } from "@/i18n";
 import { firstMessage } from "@/lib/validation";

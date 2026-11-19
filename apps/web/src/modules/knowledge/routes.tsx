@@ -1,6 +1,6 @@
 import { createRoute, type AnyRoute } from "@tanstack/react-router";
 import { Page } from "@/components/layout/page";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { useT } from "@/i18n";
 import { appRoute, requireAdmin } from "@/routes/app";
 import { useKnowledgeSources } from "./api";

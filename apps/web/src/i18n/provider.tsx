@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { UIProvider } from "@meldgrove/ui/i18n";
 import { LocaleContext } from "./index";
 import { isLocale, pickLocale, type Locale } from "./locales";
 
@@ -28,7 +29,7 @@ function browserLocale(): Locale {
   return pickLocale(navigator.languages?.join(",") || navigator.language);
 }
 
-/** Provides the interface language to `useT` and sets `<html lang>`. */
+/** Provides the interface language to `useT` and the @meldgrove/ui components, and sets `<html lang>`. */
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [choice, setChoice] = useState<LocaleChoice>(storedChoice);
   const locale = choice === "browser" ? browserLocale() : choice;
@@ -45,7 +46,9 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
   return (
     <LocaleChoiceContext.Provider value={{ choice, setChoice }}>
-      <LocaleContext.Provider value={locale}>{children}</LocaleContext.Provider>
+      <LocaleContext.Provider value={locale}>
+        <UIProvider locale={locale}>{children}</UIProvider>
+      </LocaleContext.Provider>
     </LocaleChoiceContext.Provider>
   );
 }

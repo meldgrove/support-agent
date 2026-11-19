@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { parseMrkdwn, type Inline } from "@/lib/mrkdwn";
-import { cn } from "@/lib/utils";
+import { cn } from "@meldgrove/ui/utils";
 
 function InlineNodes({ nodes }: { nodes: Inline[] }) {
   return nodes.map((node, index) => {

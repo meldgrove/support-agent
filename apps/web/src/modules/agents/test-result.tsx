@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { ChevronDown, ExternalLink, Save } from "lucide-react";
 import type { PreviewResult, RetrievedSource } from "@support-agent/shared/api/agents";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@meldgrove/ui/badge";
+import { Button } from "@meldgrove/ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@meldgrove/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@meldgrove/ui/collapsible";
+import { Alert, AlertDescription, AlertTitle } from "@meldgrove/ui/alert";
 import { OutcomeBadge } from "@/components/status-badges";
 import { SlackMessage } from "@/components/slack-message";
 import { useT } from "@/i18n";
 import { useFormatter } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { cn } from "@meldgrove/ui/utils";
 import { messages } from "./messages";
 
 function SourceItem({ source, cited }: { source: RetrievedSource; cited: boolean }) {

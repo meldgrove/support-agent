@@ -16,7 +16,8 @@ npm workspaces, Node.js 26, strict TypeScript.
   model adapters (Anthropic SDK; OpenAI SDK for OpenAI, Mistral and
   OpenAI-compatible APIs), pino logs, Vitest.
 - `apps/web`: Vite + React 19 admin app, TanStack Router and Query,
-  shadcn/ui with Tailwind CSS 4, react-hook-form with zod, en + de.
+  Tailwind CSS 4 with `@meldgrove/ui` (the shared Meldgrove theme, shadcn/ui
+  components and update button), react-hook-form with zod, en + de.
 - `packages/shared` (`@support-agent/shared/*`): zod schemas of the API
   (`api/*.ts`), roles, error report redaction. Both apps use them.
 
@@ -61,6 +62,9 @@ packages/shared/src/api/  request and response schemas
 - **Answers are grounded:** the answer step gets only the found passages and
   the instructions; the posted links come from the cited passages, never from
   model text. Keep it that way.
+- **UI components** come from `@meldgrove/ui` (`@meldgrove/ui/<name>`, `cn`
+  from `@meldgrove/ui/utils`); the app keeps no copies. A missing component or
+  a fix goes into that package.
 - **Errors:** throw `AppError` helpers (`http/errors.ts`) with short, plain
   messages. Model and search failures become `LlmError` / `SearchError` with
   messages an admin can act on, without response bodies or keys.

@@ -1,9 +1,9 @@
 import { CircleAlert, CircleCheck, CircleDashed, CircleHelp, CircleMinus, Loader } from "lucide-react";
 import type { Outcome } from "@support-agent/shared/api/agents";
 import type { BotState } from "@support-agent/shared/api/status";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@meldgrove/ui/badge";
 import { defineMessages, useT } from "@/i18n";
-import { cn } from "@/lib/utils";
+import { cn } from "@meldgrove/ui/utils";
 
 export const outcomeMessages = defineMessages({
   en: {

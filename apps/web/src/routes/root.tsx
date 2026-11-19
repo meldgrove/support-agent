@@ -1,8 +1,8 @@
 import { createRootRouteWithContext, Link, Outlet } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/states";
+import { Toaster } from "@meldgrove/ui/sonner";
+import { Button } from "@meldgrove/ui/button";
+import { EmptyState } from "@meldgrove/ui/states";
 import { common } from "@/i18n/common";
 import { useT } from "@/i18n";
 import { LocaleProvider } from "@/i18n/provider";

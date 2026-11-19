@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { ExternalLink, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { Exchange } from "@support-agent/shared/api/exchanges";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ErrorState, LoadingState } from "@/components/states";
+import { Alert, AlertDescription, AlertTitle } from "@meldgrove/ui/alert";
+import { Badge } from "@meldgrove/ui/badge";
+import { Button } from "@meldgrove/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@meldgrove/ui/sheet";
+import { ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { OutcomeBadge } from "@/components/status-badges";
 import { SlackMessage } from "@/components/slack-message";
 import { useT } from "@/i18n";

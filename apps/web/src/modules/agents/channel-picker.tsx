@@ -2,8 +2,8 @@ import { useId, useMemo, useState } from "react";
 import { AlertTriangle, Check, Hash, Lock, Plus, X } from "lucide-react";
 import { slackChannelIdSchema } from "@support-agent/shared/api/agents";
 import type { SlackChannel } from "@support-agent/shared/api/slack";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@meldgrove/ui/alert";
+import { Button } from "@meldgrove/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -11,15 +11,15 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
-import { FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Spinner } from "@/components/ui/spinner";
+} from "@meldgrove/ui/command";
+import { FieldDescription, FieldError, FieldLabel } from "@meldgrove/ui/field";
+import { Input } from "@meldgrove/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@meldgrove/ui/popover";
+import { Spinner } from "@meldgrove/ui/spinner";
 import { useIsAdmin } from "@/hooks/use-me";
 import { useLocale, useT } from "@/i18n";
 import { errorMessage } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@meldgrove/ui/utils";
 import { translateMessage } from "@/lib/validation";
 import {
   isSlackNotConfigured,

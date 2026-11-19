@@ -3,21 +3,21 @@ import { Lock, MoreHorizontal, Plus, Trash2, UserCheck, UserX, UsersRound } from
 import { toast } from "sonner";
 import { ROLES, type Role } from "@support-agent/shared/roles";
 import type { User } from "@support-agent/shared/api/users";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ConfirmDialog } from "@meldgrove/ui/confirm-dialog";
 import { Page, PageHeader } from "@/components/layout/page";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
+import { Badge } from "@meldgrove/ui/badge";
+import { Button } from "@meldgrove/ui/button";
+import { Card } from "@meldgrove/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+} from "@meldgrove/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@meldgrove/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@meldgrove/ui/table";
 import { useMe } from "@/hooks/use-me";
 import { useT } from "@/i18n";
 import { common } from "@/i18n/common";

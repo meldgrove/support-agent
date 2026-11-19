@@ -5,7 +5,7 @@ import { rootRoute } from "@/routes/root";
 import { appRoute } from "@/routes/app";
 import { signInRoute } from "@/routes/sign-in";
 import { appRoutes } from "@/modules";
-import { LoadingState } from "@/components/states";
+import { LoadingState } from "@meldgrove/ui/states";
 
 const routeTree = rootRoute.addChildren([signInRoute, appRoute.addChildren(appRoutes)]);
 

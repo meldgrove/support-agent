@@ -13,8 +13,8 @@ import {
   type ProviderKind,
   type ProviderUpdate,
 } from "@support-agent/shared/api/providers";
-import { SecretField, initialSecret, secretPayload, type SecretValue } from "@/components/secret-field";
-import { Button } from "@/components/ui/button";
+import { SecretField, initialSecret, secretPayload, type SecretValue } from "@meldgrove/ui/secret-field";
+import { Button } from "@meldgrove/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -22,11 +22,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+} from "@meldgrove/ui/dialog";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@meldgrove/ui/field";
+import { Input } from "@meldgrove/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@meldgrove/ui/select";
+import { Spinner } from "@meldgrove/ui/spinner";
 import { useLocale, useT } from "@/i18n";
 import { common } from "@/i18n/common";
 import { errorMessage } from "@/lib/api";

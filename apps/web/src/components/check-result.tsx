@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CircleCheck, CircleX } from "lucide-react";
 import type { CheckResult } from "@support-agent/shared/api/common";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@meldgrove/ui/alert";
 import { defineMessages, useT } from "@/i18n";
 
 const messages = defineMessages({
