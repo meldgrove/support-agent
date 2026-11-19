@@ -15,24 +15,54 @@ function isUpdatesResponse(value: unknown): value is UpdatesResponse {
   return typeof body?.reachable === "boolean" && typeof body.app === "object" && body.app !== null;
 }
 
+/** How long one status request may take; the app's own call to the updater takes at most 3 s. */
+const STATUS_TIMEOUT_MS = 10_000;
+
+/** The status, or an error after `timeoutMs`: a request that hangs must not stop the polling. */
+async function getStatus(signal: AbortSignal, timeoutMs: number): Promise<UpdatesResponse> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal.addEventListener("abort", abort);
+  const timer = setTimeout(abort, timeoutMs);
+  try {
+    const response = await api.get<unknown>("/updates", undefined, controller.signal);
+    // Anything else (a sign-in page after a redirect) means the session is gone.
+    if (!isUpdatesResponse(response)) throw new ApiError(401, "unauthorized", "Not signed in");
+    return response;
+  } catch (error) {
+    if (controller.signal.aborted && !signal.aborted) {
+      throw new Error(`The app did not answer within ${Math.ceil(timeoutMs / 1000)} seconds.`, {
+        cause: error,
+      });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", abort);
+  }
+}
+
 /**
  * The update status: on page load, every 5 minutes, and on window focus at
  * most once a minute; every 2 seconds while the page waits for an
- * installation. Checks run only on request. Stops after a 401 or 403.
+ * installation. Checks run only on request. After a 401, a 403 or a sign-in
+ * page, no automatic request runs any more (interval, focus, reconnect).
+ * Before `deadline` (an unconfirmed attempt's end), each request gets at
+ * most the time left.
  */
-export function useUpdates(options: { waiting?: boolean } = {}) {
+export function useUpdates(options: { waiting?: boolean; deadline?: number | null } = {}) {
+  const automatic = (query: { state: { error: unknown } }) => !isSignedOut(query.state.error);
   return useQuery({
     queryKey: updatesQueryKey,
-    queryFn: async ({ signal }) => {
-      const response = await api.get<unknown>("/updates", undefined, signal);
-      // Anything else (a sign-in page after a redirect) means the session is gone.
-      if (!isUpdatesResponse(response)) throw new ApiError(401, "unauthorized", "Not signed in");
-      return response;
+    queryFn: ({ signal }) => {
+      const left = options.deadline ? options.deadline - Date.now() : 0;
+      return getStatus(signal, left > 0 ? Math.min(left, STATUS_TIMEOUT_MS) : STATUS_TIMEOUT_MS);
     },
     staleTime: 60_000,
-    refetchInterval: (query) =>
-      isSignedOut(query.state.error) ? false : options.waiting ? 2_000 : 5 * 60_000,
+    refetchInterval: (query) => (!automatic(query) ? false : options.waiting ? 2_000 : 5 * 60_000),
     refetchIntervalInBackground: options.waiting ?? false,
+    refetchOnWindowFocus: automatic,
+    refetchOnReconnect: automatic,
     // A failed request while the app restarts is expected; the next poll tries again.
     retry: false,
   });

@@ -4,17 +4,22 @@ import type { Stage } from "./state";
 import {
   adoptWaiting,
   afterInstallAnswer,
+  afterStatusError,
   buttonState,
   follow,
+  ignoreWaiting,
   installAction,
   installOutcome,
   installsAt,
+  isIgnored,
   noteSummary,
   parseCooldown,
   parseWindow,
+  reconcileDeadline,
   RECONCILE_MS,
   SLOW_AFTER_MS,
   startWaiting,
+  unconfirmedEnd,
   type Tracked,
   type Waiting,
 } from "./state";
@@ -121,7 +126,7 @@ describe("buttonState", () => {
           },
         }),
       ),
-    ).toEqual({ kind: "installing", version: "0.2.1", stage: "pulling", slow: false });
+    ).toEqual({ kind: "installing", version: "0.2.1", stage: "pulling", following: false, slow: false });
     // Mode off still shows what is new; "off" only when nothing is.
     const off = { mode: "off", automatic: false } as const;
     expect(stateOf(reachable({ ...off, available: update("0.2.1") }))).toMatchObject({
@@ -181,6 +186,18 @@ describe("buttonState", () => {
     });
     // No longer offered: still shown, without anything to try again.
     expect(stateOf(reachable({ last }), { tracked })).toMatchObject({ kind: "failed", update: null });
+    // A newer version offered instead: that offer, with the failure as a line in it.
+    expect(stateOf(reachable({ available: update("0.3.1"), last }), { tracked })).toEqual({
+      kind: "available",
+      update: update("0.3.1"),
+      attention: null,
+      failure: { version: "0.3.0", message: "migration failed" },
+    });
+    expect(stateOf(reachable({ attention: update("0.4.0"), last }), { tracked })).toEqual({
+      kind: "attention",
+      update: update("0.4.0"),
+      failure: { version: "0.3.0", message: "migration failed" },
+    });
     // A newer result replaces it.
     expect(
       stateOf(reachable({ last: { ...last, result: "installed", finishedAt: "2026-11-19T09:59:30.000Z" } }), {
@@ -208,6 +225,7 @@ describe("buttonState", () => {
       kind: "installing",
       version: "0.2.1",
       stage: null,
+      following: true,
       slow: false,
     });
     const without = { response: undefined, receivedAt: 0, waiting, tracked: null, checking: false };
@@ -223,7 +241,7 @@ describe("buttonState", () => {
   it("keeps installing while the updater reports it, also when the app already runs the new version", () => {
     const waiting = { ...startWaiting("0.2.1", reachable(), NOW - 60_000), confirmed: true };
     expect(stateOf(reachable({ installing: installing("0.2.1", "starting") }, "0.2.1"), { waiting })).toEqual(
-      { kind: "installing", version: "0.2.1", stage: "starting", slow: false },
+      { kind: "installing", version: "0.2.1", stage: "starting", following: true, slow: false },
     );
   });
 
@@ -241,6 +259,13 @@ describe("buttonState", () => {
       message: "container web is unhealthy",
       update: update("0.2.1"),
       attention: false,
+    });
+    // A newer version replaced the failed one: that offer, with the failure as a line.
+    expect(stateOf(reachable({ available: update("0.2.2"), last }), { waiting })).toEqual({
+      kind: "available",
+      update: update("0.2.2"),
+      attention: null,
+      failure: { version: "0.2.1", message: "container web is unhealthy" },
     });
     // A result from before the attempt is older: still installing.
     const stale = { ...last, finishedAt: "2026-11-19T09:58:00.000Z" };
@@ -269,7 +294,7 @@ describe("installOutcome", () => {
   });
   /** The outcome of an answer received two minutes after the attempt started. */
   const outcome = (response: UpdatesResponse, attempt: Waiting = waiting, receivedAt = NOW + 120_000) =>
-    installOutcome(follow(attempt, response, receivedAt), response, receivedAt, receivedAt);
+    installOutcome(follow(attempt, response, receivedAt), response, receivedAt);
 
   it("is done when nothing reports the installation any more and the app runs the new version", () => {
     expect(outcome(reachable({}, "0.2.1"))).toBe("done");
@@ -295,6 +320,26 @@ describe("installOutcome", () => {
     expect(outcome(reachable({ last: finished("installed") }, "sha256:0123456789ab"))).toBe("done");
     expect(outcome(reachable({ last: finished("accepted") }))).toBe("waiting");
     expect(outcome(reachable({ last: finished("accepted") }, "0.2.1"))).toBe("done");
+  });
+
+  it("counts no updater as an outage; then a reachable accepted without app version completes", () => {
+    const development = {
+      ...startWaiting("0.2.1", { ...before, app: { version: null } }, NOW),
+      confirmed: true,
+    };
+    const restarting: UpdatesResponse = {
+      app: { version: null },
+      reachable: false,
+      updater: null,
+      error: "The update service did not answer within 3 seconds.",
+    };
+    const after = follow(development, restarting, NOW + 30_000);
+    expect(after).toMatchObject({
+      outage: true,
+      error: "The update service did not answer within 3 seconds.",
+    });
+    expect(installOutcome(after, restarting, NOW + 30_000)).toBe("waiting");
+    expect(outcome(reachable({ last: finished("accepted") }, null), after)).toBe("done");
   });
 
   it("without an app version, takes installed, and accepted only after an outage", () => {
@@ -332,15 +377,21 @@ describe("the install answer", () => {
     });
   });
 
-  it("keeps an ambiguous answer's attempt and reconciles it for 60 seconds", () => {
+  it("keeps an ambiguous answer's attempt and reconciles it", () => {
     for (const answer of [
       { httpStatus: 200, response: unreachable, error: null },
       { httpStatus: null, response: null, error: "Failed to fetch" },
       { httpStatus: 502, response: null, error: "Request failed (502)" },
+      {
+        httpStatus: 503,
+        response: { ...before, error: "The updater is busy." },
+        error: "The updater is busy.",
+      },
+      { httpStatus: 200, response: null, error: null },
     ]) {
       const next = afterInstallAnswer(attempt, answer, NOW + 10_000);
       expect(next.error).toBeNull();
-      expect(next.waiting).toMatchObject({ version: "0.2.1", confirmed: false, reason: expect.any(String) });
+      expect(next.waiting).toMatchObject({ version: "0.2.1", confirmed: false });
     }
     const kept = afterInstallAnswer(
       attempt,
@@ -348,21 +399,82 @@ describe("the install answer", () => {
       NOW,
     ).waiting!;
     expect(kept.reason).toBe("No update service answers at http://updater:8080.");
+    expect(reconcileDeadline(kept)).toBe(NOW + RECONCILE_MS);
     const settle = (response: UpdatesResponse, at: number) =>
-      installOutcome(follow(kept, response, at), response, at, at);
-    // Nothing reports it yet: keep asking, then give up.
+      installOutcome(follow(kept, response, at), response, at);
+    // Nothing reports it yet: keep asking.
     expect(settle(before, NOW + 30_000)).toBe("waiting");
-    expect(settle(unreachable, NOW + RECONCILE_MS)).toBe("not-started");
-    expect(settle(before, NOW + RECONCILE_MS)).toBe("not-started");
-    // The status reports it: follow it.
+    // The status reports it: follow it, with its identity, and no deadline any more.
     const running = reachable({ available: update("0.2.1"), installing: installing("0.2.1") });
-    expect(follow(kept, running, NOW + 30_000)).toMatchObject({ confirmed: true });
+    const followed = follow(kept, running, NOW + 30_000);
+    expect(followed).toMatchObject({ confirmed: true, startedAt: "2026-11-19T09:59:00.000Z" });
+    expect(reconcileDeadline(followed)).toBeNull();
     expect(settle(running, NOW + RECONCILE_MS + 2_000)).toBe("waiting");
     // Or a fresh result of it.
     const failed = reachable({
       last: { version: "0.2.1", result: "failed", message: "x", finishedAt: "2026-11-19T10:00:20.000Z" },
     });
     expect(settle(failed, NOW + RECONCILE_MS + 2_000)).toBe("failed");
+  });
+
+  it("confirms a 202 also when its body cannot be read", () => {
+    expect(afterInstallAnswer(attempt, { httpStatus: 202, response: null, error: null }, NOW)).toEqual({
+      waiting: { ...attempt, confirmed: true },
+      error: null,
+    });
+  });
+
+  it("takes a same-second accepted result after an ambiguous answer as the attempt's", () => {
+    // The updater writes whole seconds: 10:00:00 is the second the attempt started in.
+    const ambiguous = { ...startWaiting("0.2.1", before, NOW + 700), reason: "Failed to fetch" };
+    const accepted = (app: string | null) =>
+      reachable(
+        { last: { version: "0.2.1", result: "accepted", message: null, finishedAt: "2026-11-19T10:00:00Z" } },
+        app,
+      );
+    const at = NOW + 3_000;
+    const followed = follow(ambiguous, accepted("0.2.1"), at);
+    expect(followed.confirmed).toBe(true);
+    expect(installOutcome(followed, accepted("0.2.1"), at)).toBe("done");
+  });
+
+  it("does not take the earlier result as a retry's own, also in the same second", () => {
+    const earlier = {
+      version: "0.2.1",
+      result: "failed" as const,
+      message: "pull failed",
+      finishedAt: "2026-11-19T10:00:00Z",
+    };
+    const failedBefore = reachable({ available: update("0.2.1", { failed: "pull failed" }), last: earlier });
+    const retry = startWaiting("0.2.1", failedBefore, NOW + 500);
+    expect(retry.earlier).toEqual({ version: "0.2.1", result: "failed", finishedAt: "2026-11-19T10:00:00Z" });
+    const at = NOW + 2_000;
+    const followed = follow(retry, failedBefore, at);
+    expect(followed).toMatchObject({ confirmed: false, answered: true });
+    expect(installOutcome(followed, failedBefore, at)).toBe("waiting");
+    // Its own failure, a second later, counts.
+    const own = reachable({ last: { ...earlier, message: "x", finishedAt: "2026-11-19T10:00:01Z" } });
+    expect(follow(retry, own, at)).toMatchObject({ confirmed: true });
+    expect(installOutcome(follow(retry, own, at), own, at)).toBe("failed");
+  });
+
+  it("at the deadline, says whether the installation did not start or could not be confirmed", () => {
+    const ambiguous = { ...attempt, reason: "The updater is busy." };
+    // A reachable status answered without the attempt: it did not start.
+    const answered = follow(ambiguous, before, NOW + 2_000);
+    expect(answered.answered).toBe(true);
+    expect(unconfirmedEnd(answered)).toEqual({ message: "notStarted", detail: "The updater is busy." });
+    // Every poll failed: it could not be confirmed, with the last error.
+    let failing = afterStatusError(ambiguous, "Request failed (502)");
+    failing = afterStatusError(failing, "Failed to fetch");
+    expect(failing).toMatchObject({ outage: true, answered: false });
+    expect(unconfirmedEnd(failing)).toEqual({ message: "notConfirmed", detail: "Failed to fetch" });
+    // No updater answered: the same, with its error.
+    const unreachableNow = follow(ambiguous, unreachable, NOW + 2_000);
+    expect(unconfirmedEnd(unreachableNow)).toEqual({
+      message: "notConfirmed",
+      detail: "No update service answers at http://updater:8080.",
+    });
   });
 
   it("forgets the attempt after a refusal and shows why", () => {
@@ -395,6 +507,40 @@ describe("the install answer", () => {
       confirmed: true,
       startedAt: "2026-11-19T09:59:00.000Z",
     });
+  });
+});
+
+describe("Stop waiting", () => {
+  it("ignores the installation by the identity stored on the attempt, also while unreachable", () => {
+    const attempt = startWaiting("0.2.1", reachable({ available: update("0.2.1") }), NOW);
+    // The 202 reported the installation; later answers had no status.
+    const running = reachable({ installing: installing("0.2.1", "starting") });
+    const followed = afterInstallAnswer(
+      attempt,
+      { httpStatus: 202, response: running, error: null },
+      NOW,
+    ).waiting!;
+    const restarting: UpdatesResponse = {
+      app: { version: "0.2.0" },
+      reachable: false,
+      updater: null,
+      error: "x",
+    };
+    const stopped = follow(followed, restarting, NOW + SLOW_AFTER_MS + 1_000);
+    const ignored = ignoreWaiting(stopped);
+    expect(ignored).toEqual({ version: "0.2.1", startedAt: "2026-11-19T09:59:00.000Z", since: NOW });
+    // The updater is back and still reports it: not followed again.
+    expect(isIgnored(ignored, installing("0.2.1"))).toBe(true);
+    // Another installation is followed.
+    expect(isIgnored(ignored, { ...installing("0.2.1"), startedAt: "2026-11-19T10:20:00.000Z" })).toBe(false);
+    expect(isIgnored(ignored, installing("0.2.2"))).toBe(false);
+    expect(isIgnored(null, installing("0.2.1"))).toBe(false);
+  });
+
+  it("without a stored identity, ignores the version's installation since the attempt started", () => {
+    const ignored = ignoreWaiting(startWaiting("0.2.1", undefined, NOW + 400));
+    expect(isIgnored(ignored, { ...installing("0.2.1"), startedAt: "2026-11-19T10:00:00Z" })).toBe(true);
+    expect(isIgnored(ignored, { ...installing("0.2.1"), startedAt: "2026-11-19T09:59:59Z" })).toBe(false);
   });
 });
 

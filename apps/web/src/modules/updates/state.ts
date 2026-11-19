@@ -6,6 +6,9 @@ import type { Update, UpdatesResponse, UpdaterStatus } from "@support-agent/shar
  * result (the install flow every Meldgrove app shares).
  */
 
+/** A result of the updater (`updater.last`), without its message. */
+export type Result = Pick<NonNullable<UpdaterStatus["last"]>, "version" | "result" | "finishedAt">;
+
 /**
  * An installation the page follows. Kept in sessionStorage from before the
  * install request on, so a reload during the restart keeps following it.
@@ -16,22 +19,29 @@ export type Waiting = {
   since: number;
   /** The updater took it: a 202, or a status that reports it. Until then the page reconciles. */
   confirmed: boolean;
-  /** `installing.startedAt` as the updater reported it (its clock); earlier results are older. */
+  /** `installing.startedAt` as the updater reported it (its clock): with `version`, the installation's identity. */
   startedAt: string | null;
-  /** `updater.last.finishedAt` before the attempt: that result is older. */
-  lastBefore: string | null;
-  /** The app stopped answering at least once since (it restarted). */
+  /** `updater.last` of the newest status before the attempt (the earlier result): never the attempt's. */
+  earlier: Result | null;
+  /** The app or the updater stopped answering at least once since (it restarted). */
   outage: boolean;
+  /** A reachable status answered since the attempt started, without reporting it. */
+  answered: boolean;
   /** Why the install answer was ambiguous; said when the installation did not start. */
   reason: string | null;
+  /** The last error since the attempt started (a failed status request, no updater). */
+  error: string | null;
 };
 
 /** A failed installation the page followed: shown from `updater.last`, also before the offer says so. */
 export type Tracked = { version: string; finishedAt: string };
 
+/** An installation the admin stopped waiting for: not followed again. */
+export type Ignored = { version: string; startedAt: string | null; since: number };
+
 /** After this long, the button suggests looking at the server. */
 export const SLOW_AFTER_MS = 15 * 60_000;
-/** How long an ambiguous install answer is reconciled with the status. */
+/** How long an ambiguous install answer is reconciled with the status, from the attempt's start. */
 export const RECONCILE_MS = 60_000;
 
 export type Stage = NonNullable<UpdaterStatus["installing"]>["stage"];
@@ -43,6 +53,8 @@ export type ButtonState =
       version: string;
       /** null: not known yet; "restarting": the app or the updater does not answer. */
       stage: Stage | "restarting" | null;
+      /** This page follows it (and reloads when it is done). */
+      following: boolean;
       slow: boolean;
     }
   | { kind: "checking" }
@@ -57,9 +69,12 @@ export type ButtonState =
       /** The offer needs upgrade steps: trying again asks as **Install anyway…** does. */
       attention: boolean;
     }
-  | { kind: "available"; update: Update; attention: Update | null }
-  | { kind: "attention"; update: Update }
+  | { kind: "available"; update: Update; attention: Update | null; failure?: Failure }
+  | { kind: "attention"; update: Update; failure?: Failure }
   | { kind: "current" };
+
+/** A followed installation that failed, shown as a line once a newer version is offered. */
+export type Failure = { version: string; message: string | null };
 
 export function buttonState(input: {
   response: UpdatesResponse | undefined;
@@ -77,11 +92,7 @@ export function buttonState(input: {
   const status = response?.reachable ? response.updater : null;
   if (waiting) {
     const followed = response ? follow(waiting, response, input.receivedAt) : waiting;
-    if (
-      status?.last &&
-      response &&
-      installOutcome(followed, response, input.receivedAt, input.now) === "failed"
-    ) {
+    if (status?.last && response && installOutcome(followed, response, input.receivedAt) === "failed") {
       return failedState(status, status.last.version, status.last.message);
     }
     const installing = status?.installing?.version === waiting.version ? status.installing : null;
@@ -90,6 +101,7 @@ export function buttonState(input: {
       kind: "installing",
       version: waiting.version,
       stage: restarting ? "restarting" : (installing?.stage ?? null),
+      following: true,
       slow: input.now - waiting.since > SLOW_AFTER_MS,
     };
   }
@@ -100,6 +112,7 @@ export function buttonState(input: {
       kind: "installing",
       version: status.installing.version,
       stage: status.installing.stage,
+      following: false,
       slow: false,
     };
   }
@@ -120,8 +133,19 @@ function offered(status: UpdaterStatus, version: string): Update | null {
   return [status.available, status.attention].find((update) => update?.version === version) ?? null;
 }
 
+/**
+ * A failure the page followed: the failed state, with **Try again** while the
+ * version is offered. Once a newer version is offered instead, that offer,
+ * with the failure as a line in it.
+ */
 function failedState(status: UpdaterStatus, version: string, message: string | null): ButtonState {
   const update = offered(status, version);
+  if (!update && (status.available || status.attention)) {
+    const failure = { version, message };
+    return status.available
+      ? { kind: "available", update: status.available, attention: status.attention, failure }
+      : { kind: "attention", update: status.attention!, failure };
+  }
   return {
     kind: "failed",
     version,
@@ -141,16 +165,19 @@ export function installAction(status: UpdaterStatus, attention: boolean): "insta
   return attention && status.channelLocked !== null ? "tag" : "install";
 }
 
-/** A new attempt, remembered before the install request is sent. */
+/** A new attempt, remembered before the install request is sent, with the newest status's result. */
 export function startWaiting(version: string, before: UpdatesResponse | undefined, now: number): Waiting {
+  const last = before?.updater?.last;
   return {
     version,
     since: now,
     confirmed: false,
     startedAt: null,
-    lastBefore: before?.updater?.last?.finishedAt ?? null,
+    earlier: last ? { version: last.version, result: last.result, finishedAt: last.finishedAt } : null,
     outage: false,
+    answered: false,
     reason: null,
+    error: null,
   };
 }
 
@@ -159,13 +186,9 @@ export function adoptWaiting(response: UpdatesResponse, now: number): Waiting | 
   const installing = response.updater?.installing;
   if (!installing) return null;
   return {
-    version: installing.version,
-    since: now,
+    ...startWaiting(installing.version, response, now),
     confirmed: true,
     startedAt: installing.startedAt,
-    lastBefore: response.updater?.last?.finishedAt ?? null,
-    outage: false,
-    reason: null,
   };
 }
 
@@ -177,10 +200,11 @@ export type InstallAnswer = {
 };
 
 /**
- * What the install answer means for the attempt. 202: follow it. A refusal
- * (4xx): forget it and show why, unless its status reports an installation
- * (someone was faster): follow that one. Anything else (no updater, a
- * network error, a timeout, a 5xx) is ambiguous: keep it and reconcile.
+ * What the install answer means for the attempt. 202: follow it, also when
+ * its body cannot be read. A refusal (4xx): forget it and show why, unless
+ * its status reports an installation (someone was faster): follow that one.
+ * Anything else (no updater, a network error, a timeout, an unreadable
+ * answer, a 5xx) is ambiguous: keep it and reconcile until RECONCILE_MS.
  */
 export function afterInstallAnswer(
   waiting: Waiting,
@@ -188,8 +212,9 @@ export function afterInstallAnswer(
   now: number,
 ): { waiting: Waiting | null; error: string | null } {
   const { httpStatus, response } = answer;
-  if (httpStatus === 202 && response?.reachable) {
-    return { waiting: follow({ ...waiting, confirmed: true }, response, now), error: null };
+  if (httpStatus === 202) {
+    const confirmed = { ...waiting, confirmed: true };
+    return { waiting: response ? follow(confirmed, response, now) : confirmed, error: null };
   }
   if (httpStatus !== null && httpStatus >= 400 && httpStatus < 500) {
     const adopted = response ? adoptWaiting(response, now) : null;
@@ -198,55 +223,116 @@ export function afterInstallAnswer(
   return { waiting: { ...waiting, reason: answer.error ?? response?.error ?? null }, error: null };
 }
 
-/** `updater.last` when it is the attempt's result: its version, finished at or after the attempt's start. */
+/**
+ * `updater.last` when it is the attempt's result: its version, not the
+ * earlier result, and finished at or after the installation's start (the
+ * updater's `startedAt` when seen, else the attempt's start cut to whole
+ * seconds: the updater writes whole seconds).
+ */
 function attemptResult(waiting: Waiting, status: UpdaterStatus) {
   const last = status.last;
-  if (!last || last.version !== waiting.version || last.finishedAt === waiting.lastBefore) return null;
-  // The updater's times have whole seconds.
+  if (!last || last.version !== waiting.version) return null;
+  const earlier = waiting.earlier;
+  if (
+    earlier?.version === last.version &&
+    earlier.result === last.result &&
+    earlier.finishedAt === last.finishedAt
+  ) {
+    return null;
+  }
   const start = waiting.startedAt ? Date.parse(waiting.startedAt) : Math.floor(waiting.since / 1000) * 1000;
   return Date.parse(last.finishedAt) >= start ? last : null;
 }
 
-/** The attempt with what a fresh answer tells: the updater took it (it reports it, or its result). */
+/**
+ * The attempt with what a fresh answer tells: the updater took it (it
+ * reports it, or its result), with the installation's identity; a reachable
+ * status answered without it; or no updater answered (an outage, and why).
+ */
 export function follow(waiting: Waiting, response: UpdatesResponse, receivedAt: number): Waiting {
+  if (receivedAt < waiting.since) return waiting;
+  if (!response.reachable) {
+    const error = response.error ?? waiting.error;
+    return waiting.outage && waiting.error === error ? waiting : { ...waiting, outage: true, error };
+  }
   const status = response.updater;
-  if (receivedAt < waiting.since || !status) return waiting;
+  if (!status) return waiting;
   const installing = status.installing?.version === waiting.version ? status.installing : null;
-  if (!installing && !attemptResult(waiting, status)) return waiting;
+  if (!installing && !attemptResult(waiting, status)) {
+    return waiting.confirmed || waiting.answered ? waiting : { ...waiting, answered: true };
+  }
   const startedAt = waiting.startedAt ?? installing?.startedAt ?? null;
   return waiting.confirmed && startedAt === waiting.startedAt
     ? waiting
     : { ...waiting, confirmed: true, startedAt };
 }
 
+/** A failed status request while following: an outage (the app restarts), and why. */
+export function afterStatusError(waiting: Waiting, error: string): Waiting {
+  return waiting.outage && waiting.error === error ? waiting : { ...waiting, outage: true, error };
+}
+
 /**
  * Where the attempt stands after an answer, first match wins: a failed
  * result; still installing (also when the app already runs the new version:
  * the server reports only once every service is healthy, and may still roll
- * back); installed; accepted by a platform, once the new app answers;
- * nothing reports it any more and the app runs the version. An unconfirmed
- * attempt without any of these is given up after RECONCILE_MS.
+ * back); installed; accepted by a platform, once the new app answers (or,
+ * without an app version, a reachable answer after an outage); nothing
+ * reports it any more and the app runs the version. An unconfirmed attempt
+ * ends by its own timer (`unconfirmedEnd`), not here.
  */
 export function installOutcome(
   waiting: Waiting,
   response: UpdatesResponse,
   receivedAt: number,
-  now: number,
-): "waiting" | "done" | "failed" | "not-started" {
+): "waiting" | "done" | "failed" {
   if (receivedAt < waiting.since) return "waiting";
   const status = response.reachable ? response.updater : null;
+  if (!status) return "waiting";
   const app = response.app.version;
-  if (status) {
-    const result = attemptResult(waiting, status);
-    if (result?.result === "failed" || result?.result === "rolled-back") return "failed";
-    if (status.installing?.version === waiting.version) return "waiting";
-    if (result?.result === "installed") return "done";
-    if (result?.result === "accepted") {
-      return app === waiting.version || (app === null && waiting.outage) ? "done" : "waiting";
-    }
-    if (!status.installing && app === waiting.version) return "done";
+  const result = attemptResult(waiting, status);
+  if (result?.result === "failed" || result?.result === "rolled-back") return "failed";
+  if (status.installing?.version === waiting.version) return "waiting";
+  if (result?.result === "installed") return "done";
+  if (result?.result === "accepted") {
+    return app === waiting.version || (app === null && waiting.outage) ? "done" : "waiting";
   }
-  return !waiting.confirmed && now - waiting.since >= RECONCILE_MS ? "not-started" : "waiting";
+  return !status.installing && app === waiting.version ? "done" : "waiting";
+}
+
+/** When an unconfirmed attempt is given up (ms, browser clock); null: it is confirmed. */
+export function reconcileDeadline(waiting: Waiting | null): number | null {
+  return waiting && !waiting.confirmed ? waiting.since + RECONCILE_MS : null;
+}
+
+/**
+ * What the page says when it gives up an unconfirmed attempt at its
+ * deadline: it did not start, with the install answer's reason, when a
+ * reachable status answered without it; otherwise it could not be confirmed,
+ * with the last error.
+ */
+export function unconfirmedEnd(waiting: Waiting): {
+  message: "notStarted" | "notConfirmed";
+  detail: string | null;
+} {
+  return waiting.answered
+    ? { message: "notStarted", detail: waiting.reason }
+    : { message: "notConfirmed", detail: waiting.error ?? waiting.reason };
+}
+
+/** Stop waiting: the installation to ignore from then on, by its identity (or its version and the attempt's start). */
+export function ignoreWaiting(waiting: Waiting): Ignored {
+  return { version: waiting.version, startedAt: waiting.startedAt, since: waiting.since };
+}
+
+/** Whether a reported installation is the one the admin stopped waiting for. */
+export function isIgnored(
+  ignored: Ignored | null,
+  installing: { version: string; startedAt: string },
+): boolean {
+  if (ignored?.version !== installing.version) return false;
+  if (ignored.startedAt !== null) return installing.startedAt === ignored.startedAt;
+  return Date.parse(installing.startedAt) >= Math.floor(ignored.since / 1000) * 1000;
 }
 
 /** When an update installs by itself: a time, "at the next check" once that time has passed, or never. */
@@ -281,30 +367,63 @@ export function parseWindow(value: string | null): { from: string; to: string } 
 }
 
 const STORAGE_KEY = "support-agent.updates.installing";
+const IGNORED_KEY = "support-agent.updates.ignored";
 
-export function loadWaiting(): Waiting | null {
+const text = (value: unknown) => (typeof value === "string" ? value : null);
+
+function readResult(value: unknown): Result | null {
+  const result = value as Partial<Result> | null | undefined;
+  return typeof result?.version === "string" &&
+    typeof result.result === "string" &&
+    typeof result.finishedAt === "string"
+    ? { version: result.version, result: result.result, finishedAt: result.finishedAt }
+    : null;
+}
+
+function load(key: string): Record<string, unknown> | null {
   try {
-    const value = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? "null") as Partial<Waiting> | null;
-    if (typeof value?.version !== "string" || typeof value.since !== "number") return null;
-    return {
-      version: value.version,
-      since: value.since,
-      confirmed: value.confirmed !== false,
-      startedAt: typeof value.startedAt === "string" ? value.startedAt : null,
-      lastBefore: typeof value.lastBefore === "string" ? value.lastBefore : null,
-      outage: value.outage === true,
-      reason: typeof value.reason === "string" ? value.reason : null,
-    };
+    const value = JSON.parse(sessionStorage.getItem(key) ?? "null") as unknown;
+    return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
   } catch {
     return null;
   }
 }
 
-export function saveWaiting(waiting: Waiting | null) {
+function save(key: string, value: object | null) {
   try {
-    if (waiting) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(waiting));
-    else sessionStorage.removeItem(STORAGE_KEY);
+    if (value) sessionStorage.setItem(key, JSON.stringify(value));
+    else sessionStorage.removeItem(key);
   } catch {
-    // Private mode: waiting still works until the page reloads.
+    // Private mode: it still works until the page reloads.
   }
+}
+
+export function loadWaiting(): Waiting | null {
+  const value = load(STORAGE_KEY);
+  if (typeof value?.version !== "string" || typeof value.since !== "number") return null;
+  return {
+    version: value.version,
+    since: value.since,
+    confirmed: value.confirmed !== false,
+    startedAt: text(value.startedAt),
+    earlier: readResult(value.earlier),
+    outage: value.outage === true,
+    answered: value.answered === true,
+    reason: text(value.reason),
+    error: text(value.error),
+  };
+}
+
+export function saveWaiting(waiting: Waiting | null) {
+  save(STORAGE_KEY, waiting);
+}
+
+export function loadIgnored(): Ignored | null {
+  const value = load(IGNORED_KEY);
+  if (typeof value?.version !== "string" || typeof value.since !== "number") return null;
+  return { version: value.version, startedAt: text(value.startedAt), since: value.since };
+}
+
+export function saveIgnored(ignored: Ignored | null) {
+  save(IGNORED_KEY, ignored);
 }

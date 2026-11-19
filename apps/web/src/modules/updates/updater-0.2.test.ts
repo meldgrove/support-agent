@@ -58,6 +58,7 @@ describe("the button with the real answers of Updater 0.2", () => {
       kind: "installing",
       version: "0.1.3",
       stage: "pulling",
+      following: false,
       slow: false,
     });
     expect(stateOf("install-202")).toMatchObject({

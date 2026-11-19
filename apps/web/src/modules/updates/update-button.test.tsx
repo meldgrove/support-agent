@@ -1,9 +1,12 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { focusManager, onlineManager } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UpdatesResponse, UpdaterStatus } from "@support-agent/shared/api/updates";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderWithProviders, stubFetch } from "@/test-utils";
+import { RECONCILE_MS, startWaiting, type Waiting } from "./state";
 import { UpdateButton } from "./update-button";
 
 vi.mock("@/hooks/use-me", () => ({ useIsAdmin: () => true }));
@@ -56,9 +59,41 @@ function renderButton(locale: "en" | "de" = "en") {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   sessionStorage.clear();
 });
+
+const STORAGE_KEY = "support-agent.updates.installing";
+const stored = () => JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? "null") as Waiting | null;
+
+/** An attempt from before a reload, still unconfirmed after an ambiguous install answer. */
+function storeAttempt(extra: Partial<Waiting> = {}) {
+  const attempt = { ...startWaiting("0.2.1", undefined, Date.now()), reason: "Failed to fetch", ...extra };
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(attempt));
+  return attempt;
+}
+
+/** Fetch answers from a function of the request; returns the mock to count requests. */
+function answerFetch(reply: (url: string) => Response | Error) {
+  const mock = vi.fn(async (url: string) => {
+    const answer = reply(url);
+    if (answer instanceof Error) throw answer;
+    return answer;
+  });
+  vi.stubGlobal("fetch", mock);
+  return mock;
+}
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+async function advance(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
 
 describe("UpdateButton while automatic updates are off", () => {
   it("shows a new release without installing it", async () => {
@@ -181,5 +216,149 @@ describe("UpdateButton installs", () => {
       version: "0.2.1",
       confirmed: true,
     });
+  });
+});
+
+describe("UpdateButton reconciles an unconfirmed attempt for 60 seconds", () => {
+  it("gives up at the deadline while every status request fails: could not be confirmed", async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(toast, "error");
+    storeAttempt();
+    const fetch = answerFetch(() => new TypeError("Failed to fetch"));
+    renderButton();
+
+    await advance(RECONCILE_MS - 1_000);
+    // Polled every 2 seconds, every request failed, still waiting.
+    expect(fetch.mock.calls.length).toBeGreaterThan(20);
+    expect(stored()).toMatchObject({ version: "0.2.1", confirmed: false, outage: true });
+    expect(error).not.toHaveBeenCalled();
+
+    await advance(1_000);
+    expect(error).toHaveBeenCalledWith("The installation could not be confirmed", {
+      description: "Failed to fetch",
+    });
+    expect(stored()).toBeNull();
+    // Back to normal polling.
+    const calls = fetch.mock.calls.length;
+    await advance(60_000);
+    expect(fetch.mock.calls.length).toBe(calls);
+  });
+
+  it("gives up at the deadline while a request hangs", async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(toast, "error");
+    storeAttempt();
+    // The first request never answers.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) =>
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))),
+          ),
+      ),
+    );
+    renderButton();
+
+    await advance(RECONCILE_MS);
+    expect(error).toHaveBeenCalledWith("The installation could not be confirmed", {
+      description: expect.stringContaining("did not answer"),
+    });
+    expect(stored()).toBeNull();
+  });
+
+  it("says that the installation did not start when the updater answered without it", async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(toast, "error");
+    storeAttempt({ reason: "The updater is busy. Try again in a minute." });
+    answerFetch(() => json(host()));
+    renderButton();
+
+    await advance(RECONCILE_MS);
+    expect(error).toHaveBeenCalledWith("The installation did not start", {
+      description: "The updater is busy. Try again in a minute.",
+    });
+    expect(stored()).toBeNull();
+  });
+
+  it("follows the attempt once the status reports it, past the deadline", async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(toast, "error");
+    storeAttempt();
+    const running = host({
+      installing: { version: "0.2.1", startedAt: new Date().toISOString(), manual: true, stage: "pulling" },
+    });
+    let polls = 0;
+    answerFetch(() => (++polls < 5 ? new TypeError("Failed to fetch") : json(running)));
+    renderButton();
+
+    await advance(RECONCILE_MS + 10_000);
+    expect(error).not.toHaveBeenCalled();
+    expect(stored()).toMatchObject({ version: "0.2.1", confirmed: true });
+  });
+});
+
+describe("UpdateButton after the session ended", () => {
+  it("stops every automatic status request on a sign-in page and keeps the attempt", async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(toast, "error");
+    storeAttempt();
+    const fetch = answerFetch(
+      () =>
+        new Response("<!doctype html><title>Sign in</title>", { headers: { "content-type": "text/html" } }),
+    );
+    renderButton();
+
+    await advance(RECONCILE_MS + 30_000);
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+    });
+    await advance(10_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(stored()).toMatchObject({ version: "0.2.1", confirmed: false });
+    expect(error).not.toHaveBeenCalled();
+    act(() => focusManager.setFocused(undefined));
+  });
+});
+
+describe("UpdateButton install answers through the app", () => {
+  it("keeps the attempt when the updater answers 503", async () => {
+    const busy = { ...host(), error: "The updater is busy. Try again in a minute." };
+    stubFetch({ body: host() }, { status: 503, body: busy });
+    renderButton();
+
+    await confirmInstall();
+    expect(await screen.findByRole("button", { name: "Installing 0.2.1…" })).toBeInTheDocument();
+    expect(stored()).toMatchObject({
+      version: "0.2.1",
+      confirmed: false,
+      reason: "The updater is busy. Try again in a minute.",
+    });
+  });
+});
+
+describe("UpdateButton after a failed installation", () => {
+  it("shows a newer offer with the failure as a line in it", async () => {
+    const attempt = storeAttempt({ confirmed: true, since: Date.now() - 10_000 });
+    const failed = host({
+      available: { ...host().updater!.available!, version: "0.2.2", notes: ["Fix the rollback"] },
+      last: {
+        version: "0.2.1",
+        result: "rolled-back",
+        message: "container web is unhealthy",
+        finishedAt: new Date(attempt.since + 5_000).toISOString(),
+      },
+    });
+    stubFetch({ body: failed }, { body: failed });
+    renderButton();
+
+    const popover = await screen.findByRole("dialog");
+    expect(popover).toHaveTextContent("0.2.1 failed: container web is unhealthy");
+    expect(popover).toHaveTextContent("Fix the rollback");
+    expect(within(popover).getByRole("button", { name: /Install now/ })).toBeInTheDocument();
+    expect(stored()).toBeNull();
   });
 });

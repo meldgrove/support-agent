@@ -20,16 +20,26 @@ import { DEPLOYMENT_GUIDE } from "./updates-section";
 import {
   adoptWaiting,
   afterInstallAnswer,
+  afterStatusError,
   buttonState,
   follow,
+  ignoreWaiting,
   installAction,
   installOutcome,
   installsAt,
+  isIgnored,
+  loadIgnored,
   loadWaiting,
   noteSummary,
+  reconcileDeadline,
+  saveIgnored,
   saveWaiting,
+  SLOW_AFTER_MS,
   startWaiting,
+  unconfirmedEnd,
   type ButtonState,
+  type Failure,
+  type Ignored,
   type Tracked,
   type Waiting,
 } from "./state";
@@ -49,7 +59,8 @@ function AdminUpdateButton() {
   const t = useT(messages);
   const appName = useAuthConfig()?.appName || DEFAULT_APP_NAME;
   const [waiting, setWaitingState] = useState<Waiting | null>(loadWaiting);
-  const updates = useUpdates({ waiting: waiting !== null });
+  const deadline = reconcileDeadline(waiting);
+  const updates = useUpdates({ waiting: waiting !== null, deadline });
   const check = useCheckUpdates();
   const install = useInstallUpdate();
   const [open, setOpen] = useState(false);
@@ -58,7 +69,11 @@ function AdminUpdateButton() {
   /** The failure of the installation this page followed. */
   const [tracked, setTracked] = useState<Tracked | null>(null);
   /** An installation the admin stopped waiting for: not followed again. */
-  const [ignored, setIgnored] = useState<{ version: string; startedAt: string | null } | null>(null);
+  const [ignored, setIgnoredState] = useState<Ignored | null>(loadIgnored);
+  const setIgnored = (next: Ignored | null) => {
+    saveIgnored(next);
+    setIgnoredState(next);
+  };
   const finished = useRef(false);
   const reloadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(reloadTimer.current), []);
@@ -79,12 +94,7 @@ function AdminUpdateButton() {
   const running = response?.updater?.installing ?? null;
   useEffect(() => {
     if (!running || !response || finished.current || install.isPending) return;
-    if (waiting?.version === running.version) return;
-    if (
-      ignored?.version === running.version &&
-      (ignored.startedAt ?? running.startedAt) === running.startedAt
-    )
-      return;
+    if (waiting?.version === running.version || isIgnored(ignored, running)) return;
     setTracked(null);
     setWaiting(adoptWaiting(response, Date.now()));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when an installation appears
@@ -94,12 +104,14 @@ function AdminUpdateButton() {
     if (!waiting || finished.current || install.isPending) return;
     if (failing) {
       // Expected while the app restarts; signed out: keep the attempt for a later page load.
-      if (!signedOut && !waiting.outage) setWaiting({ ...waiting, outage: true });
+      if (signedOut || updates.errorUpdatedAt < waiting.since) return;
+      const next = afterStatusError(waiting, errorMessage(updates.error));
+      if (next !== waiting) setWaiting(next);
       return;
     }
     if (!response) return;
     const followed = follow(waiting, response, receivedAt);
-    const outcome = installOutcome(followed, response, receivedAt, Date.now());
+    const outcome = installOutcome(followed, response, receivedAt);
     if (outcome === "done") {
       finished.current = true;
       saveWaiting(null);
@@ -110,14 +122,44 @@ function AdminUpdateButton() {
       setTracked(last ? { version: last.version, finishedAt: last.finishedAt } : null);
       setWaiting(null);
       setOpen(true);
-    } else if (outcome === "not-started") {
-      setWaiting(null);
-      toast.error(t("notStarted"), { description: followed.reason ?? undefined });
     } else if (followed !== waiting) {
       setWaiting(followed);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- on every answer
   }, [receivedAt, updates.errorUpdatedAt, failing, waiting, install.isPending]);
+
+  // An unconfirmed attempt ends 60 s after it started, whatever the polls
+  // return (errors, 5xx, no updater, requests that hang). After a reload past
+  // that time, once the first status request of the page settled. Signed
+  // out: kept for a later page load.
+  const settled = updates.isFetched;
+  useEffect(() => {
+    if (deadline === null || !settled || signedOut) return;
+    const since = current.current?.since;
+    const timer = setTimeout(
+      () => {
+        const latest = current.current;
+        if (!latest || latest.confirmed || latest.since !== since || finished.current) return;
+        const end = unconfirmedEnd(latest);
+        setWaiting(null);
+        toast.error(t(end.message), { description: end.detail ?? undefined });
+      },
+      Math.max(0, deadline - Date.now()),
+    );
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- per attempt
+  }, [deadline, settled, signedOut]);
+
+  // Shows "This takes longer than expected" after 15 minutes, also when no poll returns.
+  const [, setSlowTick] = useState(0);
+  const since = waiting?.since;
+  useEffect(() => {
+    if (since === undefined) return;
+    const left = since + SLOW_AFTER_MS - Date.now();
+    if (left < 0) return;
+    const timer = setTimeout(() => setSlowTick((tick) => tick + 1), left + 1);
+    return () => clearTimeout(timer);
+  }, [since]);
 
   const now = Date.now();
   const input = { response, receivedAt, waiting, tracked, failing, now };
@@ -173,8 +215,8 @@ function AdminUpdateButton() {
 
   const stopWaiting = () => {
     if (!waiting) return;
-    const startedAt = running?.version === waiting.version ? running.startedAt : waiting.startedAt;
-    setIgnored({ version: waiting.version, startedAt });
+    // By the identity stored on the attempt: the latest answer may have no status.
+    setIgnored(ignoreWaiting(waiting));
     setWaiting(null);
   };
 
@@ -394,6 +436,7 @@ function PopoverBody(props: {
     case "available":
       return (
         <>
+          {state.failure ? <FailureLine failure={state.failure} t={t} /> : null}
           <UpdateDetails update={state.update} t={t} title={t("available")} />
           {action(false) === "install" ? (
             <Button size="sm" onClick={() => props.onInstall(state.update, false)}>
@@ -419,13 +462,16 @@ function PopoverBody(props: {
       );
     case "attention":
       return (
-        <AttentionBody
-          update={state.update}
-          t={t}
-          appName={props.appName}
-          action={action(true)}
-          onInstall={props.onInstall}
-        />
+        <>
+          {state.failure ? <FailureLine failure={state.failure} t={t} /> : null}
+          <AttentionBody
+            update={state.update}
+            t={t}
+            appName={props.appName}
+            action={action(true)}
+            onInstall={props.onInstall}
+          />
+        </>
       );
     case "failed": {
       const { update, attention } = state;
@@ -467,7 +513,7 @@ function PopoverBody(props: {
                   : t(`stage_${state.stage}`)}
             </p>
           ) : null}
-          <p>{t("restarts", { app: props.appName })}</p>
+          {state.following ? <p>{t("restarts", { app: props.appName })}</p> : null}
           {state.slow ? (
             <>
               <p className="text-destructive break-words">
@@ -485,6 +531,20 @@ function PopoverBody(props: {
     default:
       return null;
   }
+}
+
+/** A followed installation that failed, above the newer offer that replaced it. */
+function FailureLine({ failure, t }: { failure: Failure; t: T }) {
+  return (
+    <p className="text-destructive flex items-start gap-2 break-words">
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <span>
+        {failure.message
+          ? t("failedLine", { version: failure.version, message: failure.message })
+          : t("failedTitle", { version: failure.version })}
+      </span>
+    </p>
+  );
 }
 
 /** In mode off, in place of the install buttons: nothing can install from here. */

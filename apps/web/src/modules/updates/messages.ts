@@ -31,6 +31,8 @@ export const messages = defineMessages({
     slow: "This takes longer than expected. Check the server ({command}).",
     stopWaiting: "Stop waiting",
     notStarted: "The installation did not start",
+    notConfirmed: "The installation could not be confirmed",
+    failedLine: "{version} failed: {message}",
     attentionTag:
       "The image tag set where {app} is deployed does not reach {version}. Take the upgrade steps, then change the tag there.",
     confirmTitle: "Install {version} now?",
@@ -104,7 +106,9 @@ export const messages = defineMessages({
     restarts: "{app} startet neu. Diese Seite lädt neu, sobald sie wieder da ist.",
     slow: "Das dauert länger als erwartet. Sieh auf dem Server nach ({command}).",
     stopWaiting: "Nicht mehr warten",
-    notStarted: "Die Installation wurde nicht gestartet",
+    notStarted: "Die Installation hat nicht begonnen",
+    notConfirmed: "Die Installation ließ sich nicht bestätigen",
+    failedLine: "{version} fehlgeschlagen: {message}",
     attentionTag:
       "Das Image-Tag, mit dem {app} deployt ist, reicht nicht bis {version}. Führe die Upgrade-Schritte aus und ändere dann dort das Tag.",
     confirmTitle: "{version} jetzt installieren?",

@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   installUpdateSchema,
   setUpdateChannelSchema,
@@ -15,11 +16,17 @@ import { callUpdater, type UpdaterResult } from "../updater/client";
  * The update button and the "Updates" settings: admin-only routes in front
  * of the updater. Every answer is an `UpdatesResponse`: 200 (202 when an
  * installation started); 409 with `error` and the latest status when the
- * updater refused; 200 with `reachable: false` when no updater answers.
+ * updater refused; 200 with `reachable: false` when no updater answers. The
+ * install route passes an updater's 5xx through: the button reconciles it
+ * with the status instead of taking it as a refusal.
  */
 const router = new Hono<AppEnv>();
 
-async function answer(c: Context<AppEnv>, result: UpdaterResult) {
+async function answer(
+  c: Context<AppEnv>,
+  result: UpdaterResult,
+  options: { passServerErrors?: boolean } = {},
+) {
   const app = { version: config().APP_VERSION ?? null };
   if (result.kind === "ok") {
     const body: UpdatesResponse = { app, reachable: true, updater: result.status, error: null };
@@ -37,7 +44,8 @@ async function answer(c: Context<AppEnv>, result: UpdaterResult) {
     updater: latest.kind === "ok" ? latest.status : null,
     error: result.error,
   };
-  return c.json(body, 409);
+  const passed = options.passServerErrors && result.httpStatus >= 500 && result.httpStatus <= 599;
+  return c.json(body, passed ? (result.httpStatus as ContentfulStatusCode) : 409);
 }
 
 router.get("/updates", async (c) => {
@@ -63,7 +71,7 @@ router.post("/updates/install", async (c) => {
       summary: `Started the installation of ${version}`,
     });
   }
-  return answer(c, result);
+  return answer(c, result, { passServerErrors: true });
 });
 
 router.post("/updates/channel", async (c) => {

@@ -241,6 +241,36 @@ describe("updates", () => {
     expect(await getDb().select().from(auditLog)).toEqual([]);
   });
 
+  it("passes an updater's 5xx on an installation through, with the reason and the latest status", async () => {
+    const admin = await createUser("admin");
+    replies = [
+      { status: 503, body: { error: "The updater is busy. Try again in a minute." } },
+      { status: 200, body: STATUS },
+    ];
+    const response = await request("POST", "/api/v1/updates/install", {
+      userId: admin.id,
+      body: { version: "0.2.1" },
+    });
+    expect(response).toEqual({
+      status: 503,
+      body: {
+        app: { version: null },
+        reachable: true,
+        updater: STATUS,
+        error: "The updater is busy. Try again in a minute.",
+      },
+    });
+    expect(await getDb().select().from(auditLog)).toEqual([]);
+
+    // Other routes keep answering a refusal as 409.
+    replies = [
+      { status: 503, body: { error: "The updater is busy. Try again in a minute." } },
+      { status: 200, body: STATUS },
+    ];
+    const check = await request("POST", "/api/v1/updates/check", { userId: admin.id, body: {} });
+    expect(check.status).toBe(409);
+  });
+
   it("switches the channel, unless it is locked", async () => {
     const admin = await createUser("admin");
     const locked = "The platform's image tag latest decides which updates install. Change it there.";
