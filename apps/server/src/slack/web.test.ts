@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OPTIONAL_BOT_SCOPES, REQUIRED_BOT_SCOPES } from "@support-agent/shared/api/slack";
-import { checkSlackTokens } from "./web";
+import { logger } from "../logger";
+import { checkSlackTokens, slackLogger } from "./web";
 
 const BOT_TOKEN = "xoxb-1-test";
 const APP_TOKEN = "xapp-1-A1-1-test";
@@ -54,6 +55,15 @@ describe("checkSlackTokens", () => {
     expect(check.missingOptionalScopes).toEqual([...OPTIONAL_BOT_SCOPES]);
   });
 
+  it("does not show unexpected error text from the Slack response", async () => {
+    vi.stubGlobal("fetch", vi.fn(fakeSlack("Unexpected private response")));
+    const check = await checkSlackTokens(BOT_TOKEN, APP_TOKEN);
+    expect(check).toMatchObject({
+      ok: false,
+      message: "The app-level token does not work (request_failed). Is Socket Mode turned on?",
+    });
+  });
+
   it.each([
     ["invalid_auth", "Slack rejected the app-level token (invalid_auth)"],
     ["token_revoked", "Slack rejected the app-level token (token_revoked)"],
@@ -68,4 +78,17 @@ describe("checkSlackTokens", () => {
     // The bot token worked, so the workspace is still shown.
     expect(check.teamName).toBe("Example");
   });
+});
+
+it("keeps arbitrary SDK warning text out of application logs", () => {
+  const child = logger.child<string>({ component: "slack-web" });
+  const warn = vi.spyOn(child, "warn").mockImplementation(() => {});
+  const childLogger = vi.spyOn(logger, "child").mockReturnValue(child);
+  try {
+    slackLogger("slack-web").warn("Unexpected private response");
+    expect(warn).toHaveBeenCalledExactlyOnceWith("Slack SDK warning");
+  } finally {
+    childLogger.mockRestore();
+    warn.mockRestore();
+  }
 });

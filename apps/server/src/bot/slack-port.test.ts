@@ -39,6 +39,23 @@ it("preserves auto-linking for configured messages", async () => {
   expect(postMessage.mock.calls[0]?.[0]).not.toHaveProperty("parse");
 });
 
+it.each([false, true])("sanitizes posting failures, with customization retry %s", async (customize) => {
+  const postMessage = vi.fn().mockRejectedValue(new Error("Private upstream detail"));
+  if (customize) postMessage.mockRejectedValueOnce({ data: { error: "missing_scope" } });
+  const port = webSlackPort({ chat: { postMessage } } as unknown as WebClient, "xoxb-test-token");
+  await expect(
+    port.postMessage({
+      channel: "C1",
+      threadTs: null,
+      text: "Test",
+      username: customize ? "Support" : null,
+      iconUrl: null,
+    }),
+  ).rejects.toMatchObject({ message: "Could not post the Slack message", code: "request_failed" });
+  expect(postMessage).toHaveBeenCalledTimes(customize ? 2 : 1);
+  if (customize) expect(postMessage.mock.calls[1]?.[0]).not.toHaveProperty("username");
+});
+
 describe("downloadImage", () => {
   const fetchMock = vi.fn<typeof fetch>();
   const port = webSlackPort({} as WebClient, "xoxb-test-token");

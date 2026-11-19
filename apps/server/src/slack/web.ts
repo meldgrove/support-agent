@@ -13,11 +13,10 @@ export function slackLogger(name: string): Logger {
   return {
     debug: () => undefined,
     info: () => undefined,
-    warn: (...messages: unknown[]) =>
-      child.warn({ detail: messages.map(String).join(" ").slice(0, 500) }, "slack"),
+    // SDK warnings can contain response text or temporary WebSocket credentials.
+    warn: () => child.warn("Slack SDK warning"),
     // Brief disconnects are normal; the bot logs real failures itself, at error level.
-    error: (...messages: unknown[]) =>
-      child.warn({ detail: messages.map(String).join(" ").slice(0, 500) }, "slack"),
+    error: () => child.warn("Slack SDK error"),
     setLevel: (next: LogLevel) => {
       level = next;
     },
@@ -78,9 +77,28 @@ export type SlackCheck = {
   missingOptionalScopes: string[];
 };
 
-function slackErrorCode(error: unknown): string {
-  const data = (error as { data?: { error?: unknown } }).data;
-  return typeof data?.error === "string" ? data.error : "request_failed";
+const AUTH_FAILURES = new Set([
+  "account_inactive",
+  "invalid_auth",
+  "not_allowed_token_type",
+  "not_authed",
+  "team_disabled",
+  "token_expired",
+  "token_revoked",
+  "user_removed_from_team",
+]);
+const OTHER_KNOWN_ERRORS = new Set(["internal_error", "missing_scope", "ratelimited"]);
+
+export function isSlackAuthFailure(code: string): boolean {
+  return AUTH_FAILURES.has(code);
+}
+
+/** The SDK may put arbitrary response text in data.error. Only return known codes. */
+export function slackErrorCode(error: unknown): string {
+  const code = (error as { data?: { error?: unknown } } | null)?.data?.error;
+  return typeof code === "string" && (isSlackAuthFailure(code) || OTHER_KNOWN_ERRORS.has(code))
+    ? code
+    : "request_failed";
 }
 
 /** Checks both tokens: the bot token with auth.test and its scopes, the app token by opening a connection URL. */

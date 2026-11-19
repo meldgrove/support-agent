@@ -3,6 +3,7 @@ import type { ImageInput } from "../llm";
 import { cleanSlackText } from "../agent/slack-format";
 import type { ThreadMessage } from "../agent/pipeline";
 import { readLimited } from "../core/read-limited";
+import { slackErrorCode } from "../slack/web";
 
 /** What the bot does in Slack. An interface, so the message handling can be tested without Slack. */
 export interface SlackPort {
@@ -40,11 +41,6 @@ export type SlackFile = {
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-function slackError(error: unknown): string {
-  const data = (error as { data?: { error?: unknown } }).data;
-  return typeof data?.error === "string" ? data.error : "";
-}
-
 export function isReadableImage(file: SlackFile): boolean {
   return Boolean(file.mimetype && IMAGE_TYPES.has(file.mimetype) && (file.size ?? 0) <= MAX_IMAGE_BYTES);
 }
@@ -76,19 +72,23 @@ export function webSlackPort(client: WebClient, botToken: string): SlackPort {
         ...(threadTs ? { thread_ts: threadTs } : {}),
       };
       try {
-        const response = await client.chat.postMessage({
-          ...base,
-          ...(username ? { username } : {}),
-          ...(iconUrl ? { icon_url: iconUrl } : {}),
-        });
+        const response = await client.chat
+          .postMessage({
+            ...base,
+            ...(username ? { username } : {}),
+            ...(iconUrl ? { icon_url: iconUrl } : {}),
+          })
+          .catch((error: unknown) => {
+            // Without chat:write.customize, post under the app's own name.
+            if ((username || iconUrl) && slackErrorCode(error) === "missing_scope") {
+              return client.chat.postMessage(base);
+            }
+            throw error;
+          });
         return response.ts ?? null;
       } catch (error) {
-        // Without chat:write.customize, post under the app's own name.
-        if ((username || iconUrl) && slackError(error) === "missing_scope") {
-          const response = await client.chat.postMessage(base);
-          return response.ts ?? null;
-        }
-        throw error;
+        // Plain SDK errors can include arbitrary response header values.
+        throw Object.assign(new Error("Could not post the Slack message"), { code: slackErrorCode(error) });
       }
     },
     async addReaction(channel, ts, name) {

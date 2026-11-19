@@ -10,7 +10,7 @@ import { botStatus } from "../db/schema";
 import { logger } from "../logger";
 import type { AgentRuntime } from "../agent/pipeline";
 import { alertText } from "../agent/slack-format";
-import { slackApiUrl, slackLogger, webClient } from "../slack/web";
+import { isSlackAuthFailure, slackApiUrl, slackErrorCode, slackLogger, webClient } from "../slack/web";
 import { ConfigStore, type BotConfig } from "./config-store";
 import { handleMessage, handleReaction, type MessageEvent, type ReactionEvent } from "./handler";
 import { webSlackPort, type SlackPort } from "./slack-port";
@@ -160,12 +160,10 @@ export class Bot {
       await socket.start();
     } catch (error) {
       if (this.socket !== socket) return;
-      const code = (error as { data?: { error?: string } }).data?.error ?? (error as Error).message;
-      this.authFailed = /invalid_auth|not_authed|token_revoked|not_allowed_token_type|account_inactive/.test(
-        code,
-      );
+      const code = slackErrorCode(error);
+      this.authFailed = isSlackAuthFailure(code);
       this.setState("disconnected");
-      logger.error({ code: String(code).slice(0, 100) }, "could not connect to Slack");
+      logger.error({ code }, "could not connect to Slack");
     }
   }
 
