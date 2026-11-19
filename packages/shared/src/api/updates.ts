@@ -3,7 +3,8 @@ import { z } from "zod";
 /**
  * In-app updates: the app's admin routes (`/updates`) in front of the
  * Meldgrove Updater's API (`UPDATER_URL`). The updater's `Status` and
- * `Update` are its contract (meldgrove-master docs/updates.md); change both
+ * `Update` are its contract
+ * (https://github.com/meldgrove/updater#the-apps-update-button); change both
  * sides together.
  */
 

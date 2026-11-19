@@ -4,9 +4,10 @@ import { readLimited } from "../core/read-limited";
 import { logger } from "../logger";
 
 /**
- * The Meldgrove Updater's HTTP API at UPDATER_URL (meldgrove-master
- * docs/updates.md). It has no authentication and only answers inside the
- * Compose network; only admin routes call it.
+ * The Meldgrove Updater's HTTP API at UPDATER_URL
+ * (https://github.com/meldgrove/updater#the-apps-update-button). It has no
+ * authentication and only answers inside the Compose network; only admin
+ * routes call it.
  */
 const CALLS = {
   status: { method: "GET", path: "/v1/status", timeoutMs: 3_000 },
