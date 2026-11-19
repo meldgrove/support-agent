@@ -16,6 +16,7 @@ import { useLocale, useT } from "@/i18n";
 import { common } from "@/i18n/common";
 import { errorMessage } from "@/lib/api";
 import { applyServerErrors, useSchemaResolver } from "@/lib/validation";
+import { UpdatesSection } from "@/modules/updates/updates-section";
 import { useSaveSettings, useSettings } from "./api";
 import { messages } from "./messages";
 
@@ -138,6 +139,7 @@ export function SettingsPage() {
       ) : (
         <SettingsForm settings={settings.data} />
       )}
+      <UpdatesSection />
     </Page>
   );
 }

@@ -8,6 +8,8 @@ export class ApiError extends Error {
     message: string,
     /** Messages by field path, e.g. `{ "config.url": "Enter a URL" }`. */
     readonly fields?: Record<string, string>,
+    /** The parsed response body, for routes that answer errors with more than the reason. */
+    readonly body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -58,13 +60,17 @@ async function request<T>(
     data = null;
   }
   if (!response.ok) {
-    const body = data as Partial<ErrorBody> | null;
+    const body = data as { error?: Partial<ErrorBody["error"]> | string } | null;
     if (response.status === 401) onUnauthorized?.();
+    // Most errors are `{ error: { code, message } }`; the update routes answer `{ error: "…", … }`.
+    const error: Partial<ErrorBody["error"]> | undefined =
+      typeof body?.error === "string" ? { message: body.error } : body?.error;
     throw new ApiError(
       response.status,
-      body?.error?.code ?? "internal_error",
-      body?.error?.message ?? `Request failed (${response.status})`,
-      body?.error?.fields,
+      error?.code ?? "internal_error",
+      error?.message ?? `Request failed (${response.status})`,
+      error?.fields,
+      data,
     );
   }
   return data as T;
