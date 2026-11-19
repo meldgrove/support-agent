@@ -240,6 +240,28 @@ describe("handleMessage", () => {
     expect(row).toMatchObject({ outcome: "silent", question: null, answer: null, reason: null });
   });
 
+  it("does not restore text when maintenance clears an in-flight exchange", async () => {
+    const db = getDb();
+    const runPipeline = async () => {
+      await putSetting(db, "app", { ...DEFAULT_APP_SETTINGS, retentionDays: 0 });
+      await runMaintenance(db);
+      return result();
+    };
+    await handleMessage(
+      { db, slack: fakeSlack().port, config: () => botConfig(agent()), runPipeline },
+      message(),
+    );
+    const [row] = await db.select().from(exchanges);
+    expect(row?.textRemovedAt).toBeInstanceOf(Date);
+    expect(row).toMatchObject({
+      outcome: "answered",
+      question: null,
+      answer: null,
+      reason: null,
+      searchQueries: [],
+    });
+  });
+
   it("notes images it could not read", async () => {
     const slack = fakeSlack();
     const run = vi.fn(async () => result());
