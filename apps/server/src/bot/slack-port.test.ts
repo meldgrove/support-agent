@@ -14,6 +14,31 @@ describe("isSlackFileUrl", () => {
   });
 });
 
+it("posts explicit citations without Slack auto-linking answer text", async () => {
+  const postMessage = vi.fn().mockResolvedValue({ ts: "1.000001" });
+  const port = webSlackPort({ chat: { postMessage } } as unknown as WebClient, "xoxb-test-token");
+  const text = "See <https://docs.example.org|the guide>, or the text https://other.example.org.";
+  await port.postMessage({ channel: "C1", text, threadTs: null, username: null, iconUrl: null });
+  expect(postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ text, parse: "none", unfurl_links: false, unfurl_media: false }),
+  );
+});
+
+it("preserves auto-linking for configured messages", async () => {
+  const postMessage = vi.fn().mockResolvedValue({ ts: "1.000001" });
+  const port = webSlackPort({ chat: { postMessage } } as unknown as WebClient, "xoxb-test-token");
+  const text = "Contact https://help.example.org.";
+  await port.postMessage({
+    channel: "C1",
+    text,
+    threadTs: null,
+    username: null,
+    iconUrl: null,
+    autoLinkUrls: true,
+  });
+  expect(postMessage.mock.calls[0]?.[0]).not.toHaveProperty("parse");
+});
+
 describe("downloadImage", () => {
   const fetchMock = vi.fn<typeof fetch>();
   const port = webSlackPort({} as WebClient, "xoxb-test-token");

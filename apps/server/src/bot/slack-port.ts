@@ -11,6 +11,8 @@ export interface SlackPort {
     /** Null posts a new message instead of a thread reply. */
     threadTs: string | null;
     text: string;
+    /** Keep Slack auto-linking for configured messages. */
+    autoLinkUrls?: boolean;
     username: string | null;
     iconUrl: string | null;
   }): Promise<string | null>;
@@ -63,10 +65,12 @@ export function isSlackFileUrl(value: string): boolean {
 
 export function webSlackPort(client: WebClient, botToken: string): SlackPort {
   return {
-    async postMessage({ channel, threadTs, text, username, iconUrl }) {
+    async postMessage({ channel, threadTs, text, username, iconUrl, autoLinkUrls }) {
       const base = {
         channel,
         text,
+        // Keep explicit citations and mrkdwn, but do not auto-link model text.
+        ...(autoLinkUrls ? {} : { parse: "none" as const }),
         unfurl_links: false,
         unfurl_media: false,
         ...(threadTs ? { thread_ts: threadTs } : {}),

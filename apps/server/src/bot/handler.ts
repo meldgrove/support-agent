@@ -164,6 +164,8 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Pro
         channel: event.channel,
         threadTs,
         text,
+        // Only these outcomes use configured text rather than a model answer.
+        ...(result.outcome === "error" || result.outcome === "no_answer" ? { autoLinkUrls: true } : {}),
         username: agent.displayName,
         iconUrl: agent.iconUrl,
       });

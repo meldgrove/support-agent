@@ -213,7 +213,10 @@ describe("handleMessage", () => {
       { db: getDb(), slack: slack.port, config: () => botConfig(agent()), runPipeline: run, alert },
       message(),
     );
-    expect(slack.posted[0]?.text).toBe(DEFAULT_APP_SETTINGS.errorMessage);
+    expect(slack.posted[0]).toMatchObject({
+      text: DEFAULT_APP_SETTINGS.errorMessage,
+      autoLinkUrls: true,
+    });
     expect(alert).toHaveBeenCalledWith(
       expect.objectContaining({ id: AGENT_ID }),
       "C0SUPPORT",
