@@ -8,6 +8,8 @@ export class ApiError extends Error {
     message: string,
     /** Messages by field path, e.g. `{ "config.url": "Enter a URL" }`. */
     readonly fields?: Record<string, string>,
+    /** The parsed response body, for routes that answer errors with more than the reason. */
+    readonly body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -34,11 +36,14 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler;
 }
 
-async function request<T>(
+type RequestOptions = { query?: Query; body?: unknown; signal?: AbortSignal };
+
+/** A request and its successful answer with its HTTP status; errors throw `ApiError`. */
+async function send<T>(
   method: string,
   path: string,
-  options: { query?: Query; body?: unknown; signal?: AbortSignal } = {},
-): Promise<T> {
+  options: RequestOptions = {},
+): Promise<{ status: number; data: T }> {
   const response = await fetch(apiUrl(path, options.query), {
     method,
     credentials: "same-origin",
@@ -49,8 +54,14 @@ async function request<T>(
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
   });
-  if (response.status === 204) return undefined as T;
-  const text = await response.text();
+  if (response.status === 204) return { status: 204, data: undefined as T };
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (error) {
+    // The status arrived, the body broke off: keep the status (a 202 still counts).
+    throw new ApiError(response.status, "unreadable_body", errorMessage(error));
+  }
   let data: unknown;
   try {
     data = text ? JSON.parse(text) : null;
@@ -58,16 +69,24 @@ async function request<T>(
     data = null;
   }
   if (!response.ok) {
-    const body = data as Partial<ErrorBody> | null;
+    const body = data as { error?: Partial<ErrorBody["error"]> | string } | null;
     if (response.status === 401) onUnauthorized?.();
+    // Most errors are `{ error: { code, message } }`; the update routes answer `{ error: "…", … }`.
+    const error: Partial<ErrorBody["error"]> | undefined =
+      typeof body?.error === "string" ? { message: body.error } : body?.error;
     throw new ApiError(
       response.status,
-      body?.error?.code ?? "internal_error",
-      body?.error?.message ?? `Request failed (${response.status})`,
-      body?.error?.fields,
+      error?.code ?? "internal_error",
+      error?.message ?? `Request failed (${response.status})`,
+      error?.fields,
+      data,
     );
   }
-  return data as T;
+  return { status: response.status, data: data as T };
+}
+
+async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+  return (await send<T>(method, path, options)).data;
 }
 
 /** Typed calls to the REST API. Types come from @support-agent/shared/api/*. */
@@ -78,6 +97,8 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, { body: body ?? {} }),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, { body: body ?? {} }),
   delete: <T = void>(path: string, query?: Query) => request<T>("DELETE", path, { query }),
+  /** A POST whose answer status matters, e.g. 202 (accepted) against 200. */
+  postWithStatus: <T>(path: string, body?: unknown) => send<T>("POST", path, { body: body ?? {} }),
 };
 
 /** A user-facing message for any error. */

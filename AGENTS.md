@@ -38,6 +38,7 @@ apps/server/src/
   agent/           pipeline (triage → search → answer), prompts, Slack formatting, runtime loading
   bot/             Socket Mode process, message handler, Slack port, config store, maintenance
   slack/           Web API helpers, app manifest
+  updater/         client of the Meldgrove Updater's API (update button, modules/updates.ts)
 apps/web/src/      admin app
 packages/shared/src/api/  request and response schemas
 ```

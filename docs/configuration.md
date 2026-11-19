@@ -53,6 +53,17 @@ process refuses them unless it runs for development on this machine
 | `BOT_HEARTBEAT_FILE`   | unset (`/tmp/bot-heartbeat` in the image) | Touched every 30 seconds while the bot is connected to Slack (or Slack is not set up yet), for the container health check. |
 | `BOT_CONCURRENCY`      | `4`                                       | Messages the bot works on at the same time.                                                                                |
 
+## Updates
+
+| Variable      | Default               | Description                                                                                                                                                                                                                                                                                                             |
+| ------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UPDATER_URL` | `http://updater:8080` | Where the update button of admins asks the `updater` service of `compose.yaml` ([Automatic updates](deployment.md#automatic-updates)). Under `compose.yaml`, an empty value falls back to this default. Only where the app reads its environment directly (`npm run dev`, `docker run`), empty switches the button off. |
+
+The `updater` service itself takes `UPDATE_COOLDOWN`, `UPDATE_WINDOW`, `TZ`,
+`UPDATE_DEPLOY_HOOK_URL`, `UPDATE_DEPLOY_HOOK_TOKEN` and, for a private
+image, `UPDATE_REGISTRY_USERNAME` and `UPDATE_REGISTRY_PASSWORD` (see
+`compose.yaml`).
+
 ## Error reports
 
 | Variable             | Description                                                                                                   |

@@ -9,6 +9,7 @@ import type { KnowledgeSource } from "@support-agent/shared/api/knowledge";
 import type { Provider } from "@support-agent/shared/api/providers";
 import type { SlackSettings } from "@support-agent/shared/api/slack";
 import type { Status } from "@support-agent/shared/api/status";
+import type { UpdatesResponse } from "@support-agent/shared/api/updates";
 import type { Me, User } from "@support-agent/shared/api/users";
 import { DEFAULT_APP_SETTINGS } from "@support-agent/shared/api/settings";
 import { DEFAULT_SEARCH_API_CONFIG } from "@support-agent/shared/api/knowledge";
@@ -122,6 +123,38 @@ const status: Status = {
   last24h: { messages: 12, answered: 8, silent: 2, noAnswer: 1, errors: 1, helpful: 3, notHelpful: 1 },
   recentErrors: [{ at: AT, agentName: "IT support", message: "The knowledge source didn't answer." }],
 };
+const updates: UpdatesResponse = {
+  app: { version: "1.0.0" },
+  reachable: true,
+  updater: {
+    updater: "0.2.0",
+    mode: "host",
+    channel: "stable",
+    channelLocked: null,
+    installed: "1.0.0",
+    available: {
+      version: "1.0.1",
+      preview: false,
+      publishedAt: AT,
+      url: "https://github.com/meldgrove/support-agent/releases/tag/v1.0.1",
+      notes: ["Fix the sign-in loop"],
+      changes: 1,
+      installsAt: null,
+      failed: null,
+    },
+    attention: null,
+    installing: null,
+    last: null,
+    checking: false,
+    checkedAt: AT,
+    error: null,
+    automatic: true,
+    cooldown: "3d",
+    window: "02:00-05:00",
+    timezone: "UTC",
+  },
+  error: null,
+};
 const slack: SlackSettings = {
   hasBotToken: true,
   hasAppToken: false,
@@ -166,6 +199,7 @@ function reply(path: string): { status: number; body: unknown } {
     "/settings": DEFAULT_APP_SETTINGS,
     "/users": { items: [user] },
     "/audit": { items: [], total: 0 },
+    "/updates": updates,
   };
   if (path === "/slack/channels") {
     return {
@@ -251,9 +285,33 @@ describe("pages", () => {
       expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeInTheDocument();
       expect(screen.queryByRole("link", { name: "Providers" })).not.toBeInTheDocument();
       expect((await screen.findAllByText(/An admin does this step\./)).length).toBe(3);
+      expect(screen.queryByRole("button", { name: /Update available/ })).not.toBeInTheDocument();
+      const paths = vi
+        .mocked(fetch)
+        .mock.calls.map(([input]) => new URL(String(input), "http://localhost").pathname);
+      expect(paths).not.toContain("/api/v1/updates");
     } finally {
       me.role = "admin";
     }
+  });
+
+  it("shows admins the update button and the updates settings", async () => {
+    renderAt("/settings");
+    await userEvent.click(await screen.findByRole("button", { name: "Update available · 1.0.1" }));
+    expect(await screen.findByText("Fix the sign-in loop")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute(
+      "href",
+      "https://github.com/meldgrove/support-agent/releases/tag/v1.0.1",
+    );
+    // In the popover's footer and in the settings.
+    expect(screen.getAllByText("Installed: 1.0.0 · Stable")).toHaveLength(2);
+    expect(
+      screen.getByText("Releases. Updates that need no action install automatically after 3 days."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("On: releases install automatically after 3 days, between 02:00 and 05:00 (UTC)."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Stable/ })).toBeChecked();
   });
 
   it("shows the sign-in page with the provider name and the no-access message", async () => {

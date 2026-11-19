@@ -58,3 +58,29 @@ describe("example secrets", () => {
     ).toBe("http://localhost:5173");
   });
 });
+
+describe("UPDATER_URL", () => {
+  afterEach(() => {
+    delete process.env.UPDATER_URL;
+    resetConfigForTests();
+  });
+
+  const updaterUrl = (value: string | undefined) => {
+    if (value === undefined) delete process.env.UPDATER_URL;
+    else process.env.UPDATER_URL = value;
+    resetConfigForTests();
+    return config().UPDATER_URL;
+  };
+
+  it("defaults to the updater of compose.yaml, and empty switches the button off", () => {
+    expect(updaterUrl(undefined)).toBe("http://updater:8080");
+    expect(updaterUrl("")).toBe("");
+    expect(updaterUrl("  ")).toBe("");
+    expect(updaterUrl("http://127.0.0.1:18080/")).toBe("http://127.0.0.1:18080");
+  });
+
+  it("must be an http URL", () => {
+    expect(() => updaterUrl("updater:8080")).toThrow(/UPDATER_URL/);
+    expect(() => updaterUrl("file:///etc/passwd")).toThrow(/UPDATER_URL/);
+  });
+});

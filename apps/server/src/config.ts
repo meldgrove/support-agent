@@ -29,6 +29,7 @@ const EXAMPLE_SECRETS = {
   ENCRYPTION_KEY: ["ZGV2ZWxvcG1lbnQta2V5LWRldmVsb3BtZW50LWtleSE="],
 };
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const DEFAULT_UPDATER_URL = "http://updater:8080";
 
 const schema = z
   .object({
@@ -86,6 +87,17 @@ const schema = z
     SLACK_API_URL: optional(z.url()),
     /** Version of a release image, set by the release workflow; unset in images built from source. */
     APP_VERSION: optional(z.string().max(100)),
+    /**
+     * The Meldgrove Updater's API (compose.yaml's `updater`) behind the update
+     * button. Unlike other variables, empty is not unset: it turns the button off.
+     * compose.yaml passes its default for an empty value too, so that works
+     * only where the app gets its environment directly.
+     */
+    UPDATER_URL: z.preprocess(
+      (value) =>
+        value === undefined ? DEFAULT_UPDATER_URL : typeof value === "string" ? value.trim() : value,
+      z.union([z.literal(""), z.url({ protocol: /^https?$/ })]),
+    ),
     /** Error reports to Sentry or a compatible service; off when unset. */
     SENTRY_DSN: optional(z.url()),
     SENTRY_ENVIRONMENT: optional(z.string().max(64)),
@@ -142,6 +154,7 @@ export function config(): Config {
   cached = {
     ...value,
     APP_URL: value.APP_URL.replace(/\/+$/, ""),
+    UPDATER_URL: value.UPDATER_URL.replace(/\/+$/, ""),
     adminEmails: splitList(value.ADMIN_EMAILS),
   };
   return cached;

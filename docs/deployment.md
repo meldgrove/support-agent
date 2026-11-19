@@ -28,7 +28,8 @@ publishes the image `ghcr.io/meldgrove/support-agent` for linux/amd64 and
 linux/arm64, tagged with its version (`0.1.0`), its series (`0.1`; from 1.0.0
 the major version, `1`) and `latest`. A release that needs manual steps
 starts a new series, so the releases within a series install without anyone
-acting.
+acting. Every change on `main` that passed its checks is published as a
+preview too: `0.1.1-preview.3` (three changes after 0.1.0) and `preview`.
 
 | File                    | Contains                                                                                            |
 | ----------------------- | --------------------------------------------------------------------------------------------------- |
@@ -95,8 +96,8 @@ run the commands as root (`sudo -i`).
 3. **Register the app at your provider** with the redirect URL
    `<APP_URL>/api/auth/callback/oidc` ([Sign-in](#sign-in)).
 4. **Create `.env`** from `.env.example` (`cp .env.example .env`,
-   `chmod 600 .env`) and set production values: `SUPPORT_AGENT_VERSION` (a
-   series such as `0.1`), `APP_URL`, `DATABASE_URL`, new secrets
+   `chmod 600 .env`) and set production values: `SUPPORT_AGENT_VERSION` (the
+   newest release, such as `0.1.0`), `APP_URL`, `DATABASE_URL`, new secrets
    (`openssl rand -base64 32` for `AUTH_SECRET` and `ENCRYPTION_KEY`), the
    `OIDC_*` values and your address in `ADMIN_EMAILS`. Remove
    `NODE_ENV=development` and `RUN_MIGRATIONS`. Without a database of your
@@ -172,24 +173,55 @@ restart policy on the bot container.
      environment variables and redeploy. Coolify reads `compose.yaml` from
      `stable`, which is at the newest release.
    - **Debian:** in `/srv/support-agent`, run `git pull` (the newest
-     release's `compose.yaml`), change `SUPPORT_AGENT_VERSION` in `.env`, and
-     run `docker compose up -d --pull always`.
+     release's `compose.yaml`), then either **Install anyway…** under the
+     [update button](#update-button), or change `SUPPORT_AGENT_VERSION` in
+     `.env` and run `docker compose up -d --pull always`.
 
 The `migrate` service applies database migrations before `web` and `bot`
 start.
 
 ## Automatic updates
 
-The `updater` service installs new releases of the tag in
-`SUPPORT_AGENT_VERSION`: with a series such as `0.1`, every release that
-installs without steps; with `latest`, every release, also those with
-upgrade steps. A release installs once the updater has seen it for three
-days (`UPDATE_COOLDOWN`: `0` installs within the hour, `7d` waits a week), and
-with `UPDATE_WINDOW` (such as `02:00-05:00`, in the time zone `TZ`) only
-then. Set up [backups](#backups) first: migrations run without anyone
-watching. Details: [meldgrove/updater](https://github.com/meldgrove/updater).
+The `updater` service of `compose.yaml`
+([meldgrove/updater](https://github.com/meldgrove/updater)) looks for new
+versions every hour and installs them. Set up [backups](#backups) first:
+migrations run without anyone watching. There are two channels:
+
+- **Stable** (default): releases. A release that needs no steps installs
+  once it has been out for three days (`UPDATE_COOLDOWN`: `12h`, `30m`, `0`
+  for within the hour), and with `UPDATE_WINDOW` (such as `02:00-05:00`, in
+  the time zone `TZ`) only then. A release with upgrade steps (a new series)
+  is shown to admins but never installs by itself.
+- **Preview** (unstable): every change on `main` as soon as its checks
+  passed, before it is released, and every release. Previews install within
+  the hour (inside the window, if set) and have no release notes. New
+  features first, and now and then a new bug. Switching back to Stable never
+  goes back to an older version: the preview stays until a release is newer.
+
+### Update button
+
+Admins see an update icon in the header of the admin interface. It checks
+for updates on click, lists the changes of an available update with a link
+to its release notes, installs it on request (**Install now**), shows the
+progress, and says why an installation failed. The page reloads once the
+server reports the new version as running. A release with upgrade steps
+installs only with **Install anyway…**: take the steps first. Where the
+image tag set on the platform decides (Coolify), the button says to take the
+steps and change that tag instead. With automatic updates off on the server,
+the button still shows new releases, but nothing installs from the app.
+**Settings → Updates** shows the installed version, the channel (on Debian,
+admins choose it there) and when updates install by themselves.
+
+Without the `updater` service, the button says that there is no update
+service; `UPDATER_URL` ([Configuration](configuration.md#updates)) points
+the app to it.
 
 ### On Coolify
+
+The image tag set in `SUPPORT_AGENT_VERSION` decides what installs: a series
+such as `0.1` gets every release that needs no steps, `latest` every
+release, also those with upgrade steps, and `preview` every preview (the
+unstable channel). Admins cannot switch the channel in the app.
 
 1. Under Settings > Advanced, turn on API Access if it is off.
 2. Under Keys & Tokens > API Tokens, create a token with only the `deploy`
@@ -202,7 +234,12 @@ The `updater` log then names the tag it watches.
 
 ### On Debian
 
-As root in `/srv/support-agent`, with `UPDATE_DEPLOY_HOOK_URL` empty:
+The server installs the version the updater asks for: it writes it into
+`SUPPORT_AGENT_VERSION` in `.env`, pulls the image, runs the migrations,
+starts the new version and waits until it is healthy. When it does not
+become healthy, the server restores `.env` and starts the version before,
+and the button says why. As root in `/srv/support-agent`, with
+`UPDATE_DEPLOY_HOOK_URL` empty:
 
 ```sh
 docker compose up -d --pull always
@@ -210,13 +247,32 @@ docker compose run --rm -T --pull always updater host-setup > updater-setup.sh
 sh updater-setup.sh
 ```
 
-The first command starts the image the tag points to now, which the updater
-takes as installed. The second writes the setup script from the updater's
-image; read it before you run it. The script installs a systemd unit that
-waits for the updater's request, then pulls the new image and runs
-`docker compose up -d`, migrations first. `docker compose logs updater` names
-the tag it watches, and `journalctl -u meldgrove-updater-support-agent.service`
-shows each installation. `sh updater-setup.sh remove` switches it off.
+The second command writes the setup script from the updater's image; read
+it before you run it. The script installs a systemd unit that waits for the
+updater's request and deploys it.
+`journalctl -u meldgrove-updater-support-agent.service` shows each
+installation; `sh updater-setup.sh remove` switches it off.
+
+The server installs images, not files: when a release changes
+`compose.yaml`, run `git pull` (branch `stable`) and `docker compose up -d`.
+
+**Installations set up before the update button** (updater 0.1) get it in
+three steps, as root in `/srv/support-agent`:
+
+1. Run `git pull` (branch `stable`) for the newest `compose.yaml`.
+2. Set `SUPPORT_AGENT_VERSION` in `.env` to the release that brings the
+   update button, or a newer one, and run `docker compose up -d --pull always`.
+   This installs the app with the button, not only the new `updater`.
+3. Run the host setup again:
+
+   ```sh
+   docker compose run --rm -T --pull always updater host-setup > updater-setup.sh
+   sh updater-setup.sh
+   ```
+
+Until the host setup runs again, the updater follows the tag in
+`SUPPORT_AGENT_VERSION` as before, and the settings say that choosing the
+channel needs it.
 
 ## Backups
 

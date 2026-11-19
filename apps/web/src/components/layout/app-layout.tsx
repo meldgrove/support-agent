@@ -41,6 +41,7 @@ import { queryClient } from "@/lib/query";
 import { defineMessages, useT } from "@/i18n";
 import { useLocaleChoice, type LocaleChoice } from "@/i18n/provider";
 import { NAVIGATION, navMessages } from "@/app/navigation";
+import { UpdateButton } from "@/modules/updates/update-button";
 
 const messages = defineMessages({
   en: {
@@ -235,7 +236,10 @@ export function AppLayout() {
           <header className="bg-background/95 sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b px-4 backdrop-blur">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
-            <span className="truncate text-sm font-medium">{appName}</span>
+            <span className="min-w-0 truncate text-sm font-medium">{appName}</span>
+            <div className="ml-auto flex items-center">
+              <UpdateButton />
+            </div>
           </header>
           <main id="main" className="flex-1">
             <Outlet />
