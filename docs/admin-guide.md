@@ -112,3 +112,13 @@ Unanswered and 👎 questions show where the knowledge base needs a page.
 
 Every change in the admin interface is listed in the **Audit log**, without
 secrets.
+
+## Updates
+
+Admins see an update icon in the header. A dot on it means a new version is
+available: click it for the changes and **Install now**. The support agent
+restarts for a moment, and the page reloads when the new version runs. A
+version that needs upgrade steps on the server says so; take the steps
+first. **Settings → Updates** shows the installed version and the channel:
+**Stable** (releases, recommended) or **Preview** (every change before its
+release). How the server installs updates: [Deployment](deployment.md#automatic-updates).

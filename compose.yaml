@@ -6,11 +6,11 @@
 #   docker compose up -d
 #
 # SUPPORT_AGENT_VERSION in .env selects the release of
-# ghcr.io/meldgrove/support-agent, e.g. 0.1.0. To upgrade, read the release
-# notes, change it, and run `docker compose up -d` again. A tag that moves
-# (0.1, latest) lets `updater` install new releases (docs/deployment.md,
-# Automatic updates). On a platform that does not pull images when it
-# deploys, PULL_POLICY=always makes every start pull them again.
+# ghcr.io/meldgrove/support-agent, e.g. 0.1.0. `updater` installs new versions
+# (docs/deployment.md, Automatic updates): on a Debian server it writes the
+# installed version there; on a platform the tag set there (0.1, latest,
+# preview) decides. On a platform that does not pull images when it deploys,
+# PULL_POLICY=always makes every start pull them again.
 #
 # Without a PostgreSQL of your own, add compose.postgres.yaml:
 #   docker compose -f compose.yaml -f compose.postgres.yaml up -d
@@ -33,6 +33,8 @@ x-app-environment: &app-environment
   OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET}
   # The reverse proxy in front of the app sets X-Forwarded-For.
   TRUST_PROXY: ${TRUST_PROXY:-true}
+  # The update button asks `updater` (below).
+  UPDATER_URL: ${UPDATER_URL:-http://updater:8080}
 
 x-app: &app
   image: *image
@@ -92,17 +94,19 @@ services:
       retries: 3
       start_period: 60s
 
-  # Automatic updates (docs/deployment.md): off until UPDATE_DEPLOY_HOOK_URL
-  # is set (Coolify) or the server watches the volume `updater` (Debian:
-  # `updater host-setup`). When the tag in SUPPORT_AGENT_VERSION points to a
-  # new image, it calls that deploy link or leaves a request in the volume,
-  # and Coolify or the server deploys the new release.
+  # Automatic updates and the update button of admins (docs/deployment.md).
+  # Debian: the server watches the volume `updater` (`updater host-setup`),
+  # writes the version to install into SUPPORT_AGENT_VERSION and deploys it;
+  # admins choose the channel (Stable, Preview) in Settings. Coolify: set
+  # UPDATE_DEPLOY_HOOK_URL; the image tag set there decides. Neither: off,
+  # but admins still see new versions. Only the app reaches its API (no ports).
   updater:
-    image: ghcr.io/meldgrove/updater:0.1
+    image: ghcr.io/meldgrove/updater:0.2
     pull_policy: ${PULL_POLICY:-missing}
     restart: unless-stopped
     environment:
       IMAGE: *image
+      VERSION_VARIABLE: SUPPORT_AGENT_VERSION
       DEPLOY_HOOK_URL: ${UPDATE_DEPLOY_HOOK_URL:-}
       DEPLOY_HOOK_TOKEN: ${UPDATE_DEPLOY_HOOK_TOKEN:-}
       # A release installs once it has been out this long, and only inside
