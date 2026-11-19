@@ -50,8 +50,9 @@ export function mapOpenAiError(error: unknown): LlmError {
     return new LlmError("rate_limited", "The provider's rate limit was reached");
   if (error instanceof OpenAI.APIConnectionTimeoutError)
     return new LlmError("timeout", "The provider did not answer in time");
+  // Provider errors may quote prompts or credentials. Keep only the status.
   if (error instanceof OpenAI.BadRequestError || error instanceof OpenAI.UnprocessableEntityError)
-    return new LlmError("bad_request", `The provider rejected the request: ${error.message.slice(0, 300)}`);
+    return new LlmError("bad_request", `The provider rejected the request (HTTP ${error.status})`);
   if (error instanceof OpenAI.APIConnectionError)
     return new LlmError("unavailable", "Could not reach the provider");
   if (error instanceof OpenAI.APIError)
@@ -71,6 +72,8 @@ export function openAiClient(connection: ProviderConnection): LlmClient {
     // Self-hosted APIs often take no key; the SDK insists on a value.
     apiKey: connection.apiKey ?? "none",
     baseURL: connection.baseUrl,
+    // SDK logs may contain the model prompt or provider response.
+    logLevel: "off",
     maxRetries: MAX_RETRIES,
     timeout: REQUEST_TIMEOUT_MS,
   });

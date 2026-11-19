@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { generateJson, llmClient, LlmError, extractJson } from "./index";
 
@@ -193,6 +193,29 @@ describe("Anthropic adapter", () => {
     expect((await generateJson(client, request, schema)).value).toEqual({ ok: true });
     expect(requests).toHaveLength(2);
   });
+});
+
+it.each(["openai", "anthropic"] as const)("omits private provider details from %s errors", async (kind) => {
+  handler = () => ({ status: 400, body: { error: { message: "Echoed private question" } } });
+  const client = llmClient({ kind, name: kind, baseUrl, apiKey: "test" });
+  await expect(generateJson(client, request, schema)).rejects.toMatchObject({
+    code: "bad_request",
+    message: "The provider rejected the request (HTTP 400)",
+  });
+});
+
+it.each(["openai", "anthropic"] as const)("keeps %s SDK debug logging off", async (kind) => {
+  handler = () => ({ status: 400, body: { error: { message: "Private model input" } } });
+  vi.stubEnv(kind === "openai" ? "OPENAI_LOG" : "ANTHROPIC_LOG", "debug");
+  const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+  try {
+    const client = llmClient({ kind, name: kind, baseUrl, apiKey: "test" });
+    await expect(generateJson(client, request, schema)).rejects.toMatchObject({ code: "bad_request" });
+    expect(debug).not.toHaveBeenCalled();
+  } finally {
+    debug.mockRestore();
+    vi.unstubAllEnvs();
+  }
 });
 
 describe("extractJson", () => {
