@@ -14,6 +14,10 @@ errors.
 Add people on the **Users** page by email address; they sign in with the
 organization's sign-in provider. Deactivating someone ends their sessions.
 
+Editors can run searches on any configured knowledge source and read
+conversations from all agents, including those in private Slack channels.
+Give the editor role to people authorized to see that data.
+
 ## 1. Connect Slack
 
 On the **Slack** page:

@@ -47,7 +47,9 @@ its own credentials with only the access its agents should have: an IT agent's
 source reads the IT pages, an HR agent's source the HR handbook. Then even a
 misleading prompt cannot make an agent quote what its source may not read.
 Every page a source returns may end up in a Slack answer to anyone in the
-agent's channels.
+agent's channels, including guests and people in Slack Connect channels.
+The bot uses the source's credentials for every question. Check who can
+read each channel before adding a source and when membership changes.
 
 ## The response
 
