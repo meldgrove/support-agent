@@ -18,7 +18,9 @@ function sample(name: string): UpdatesResponse {
 function stateOf(name: string) {
   return buttonState({
     response: sample(name),
+    receivedAt: Date.parse("2026-11-19T04:00:00Z"),
     waiting: null,
+    tracked: null,
     checking: false,
     failing: false,
     now: Date.parse("2026-11-19T04:00:00Z"),

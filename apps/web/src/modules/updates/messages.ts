@@ -29,6 +29,10 @@ export const messages = defineMessages({
     stage_deploying: "Deploying",
     restarts: "{app} restarts. This page reloads when it is back.",
     slow: "This takes longer than expected. Check the server ({command}).",
+    stopWaiting: "Stop waiting",
+    notStarted: "The installation did not start",
+    attentionTag:
+      "The image tag set where {app} is deployed does not reach {version}. Take the upgrade steps, then change the tag there.",
     confirmTitle: "Install {version} now?",
     confirmText: "{app} restarts and is unavailable for a moment. Database changes run automatically.",
     confirmAttentionTitle: "Install {version} without its upgrade steps?",
@@ -64,6 +68,7 @@ export const messages = defineMessages({
     deploymentGuide: "deployment guide",
     development: "development",
     channelSaved: "Channel saved",
+    channelNotSaved: "The update service did not save the channel.",
     days: "{count} days",
     days_one: "1 day",
     hours: "{count} hours",
@@ -98,6 +103,10 @@ export const messages = defineMessages({
     stage_deploying: "Deployment",
     restarts: "{app} startet neu. Diese Seite lädt neu, sobald sie wieder da ist.",
     slow: "Das dauert länger als erwartet. Sieh auf dem Server nach ({command}).",
+    stopWaiting: "Nicht mehr warten",
+    notStarted: "Die Installation wurde nicht gestartet",
+    attentionTag:
+      "Das Image-Tag, mit dem {app} deployt ist, reicht nicht bis {version}. Führe die Upgrade-Schritte aus und ändere dann dort das Tag.",
     confirmTitle: "{version} jetzt installieren?",
     confirmText:
       "{app} startet neu und ist kurz nicht erreichbar. Änderungen an der Datenbank laufen automatisch.",
@@ -136,6 +145,7 @@ export const messages = defineMessages({
     deploymentGuide: "Anleitung zum Deployment",
     development: "Entwicklung",
     channelSaved: "Kanal gespeichert",
+    channelNotSaved: "Der Update-Dienst hat den Kanal nicht gespeichert.",
     days: "{count} Tagen",
     days_one: "1 Tag",
     hours: "{count} Stunden",

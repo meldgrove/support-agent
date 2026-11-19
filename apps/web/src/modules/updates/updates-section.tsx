@@ -65,9 +65,13 @@ export function UpdatesSection() {
     if (!dirty) return;
     try {
       const result = await save.mutateAsync(choice);
-      setChoice(null);
-      if (result.reachable) toast.success(t("channelSaved"));
-      else toast.error(result.error ?? t("unreachable"));
+      // Saved only when the updater answers with the chosen channel.
+      if (result.reachable && result.updater?.channel === choice) {
+        setChoice(null);
+        toast.success(t("channelSaved"));
+      } else {
+        toast.error(result.reachable ? t("channelNotSaved") : (result.error ?? t("unreachable")));
+      }
     } catch (error) {
       toast.error(errorMessage(error));
     }

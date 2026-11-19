@@ -55,9 +55,9 @@ process refuses them unless it runs for development on this machine
 
 ## Updates
 
-| Variable      | Default               | Description                                                                                                                                                                       |
-| ------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `UPDATER_URL` | `http://updater:8080` | Where the update button of admins asks the `updater` service of `compose.yaml` ([Automatic updates](deployment.md#automatic-updates)). Empty (not unset) switches the button off. |
+| Variable      | Default               | Description                                                                                                                                                                                                                                                                                                             |
+| ------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UPDATER_URL` | `http://updater:8080` | Where the update button of admins asks the `updater` service of `compose.yaml` ([Automatic updates](deployment.md#automatic-updates)). Under `compose.yaml`, an empty value falls back to this default. Only where the app reads its environment directly (`npm run dev`, `docker run`), empty switches the button off. |
 
 The `updater` service itself takes `UPDATE_COOLDOWN`, `UPDATE_WINDOW`, `TZ`,
 `UPDATE_DEPLOY_HOOK_URL`, `UPDATE_DEPLOY_HOOK_TOKEN` and, for a private

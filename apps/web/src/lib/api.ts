@@ -36,11 +36,14 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler;
 }
 
-async function request<T>(
+type RequestOptions = { query?: Query; body?: unknown; signal?: AbortSignal };
+
+/** A request and its successful answer with its HTTP status; errors throw `ApiError`. */
+async function send<T>(
   method: string,
   path: string,
-  options: { query?: Query; body?: unknown; signal?: AbortSignal } = {},
-): Promise<T> {
+  options: RequestOptions = {},
+): Promise<{ status: number; data: T }> {
   const response = await fetch(apiUrl(path, options.query), {
     method,
     credentials: "same-origin",
@@ -51,7 +54,7 @@ async function request<T>(
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
   });
-  if (response.status === 204) return undefined as T;
+  if (response.status === 204) return { status: 204, data: undefined as T };
   const text = await response.text();
   let data: unknown;
   try {
@@ -73,7 +76,11 @@ async function request<T>(
       data,
     );
   }
-  return data as T;
+  return { status: response.status, data: data as T };
+}
+
+async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+  return (await send<T>(method, path, options)).data;
 }
 
 /** Typed calls to the REST API. Types come from @support-agent/shared/api/*. */
@@ -84,6 +91,8 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, { body: body ?? {} }),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, { body: body ?? {} }),
   delete: <T = void>(path: string, query?: Query) => request<T>("DELETE", path, { query }),
+  /** A POST whose answer status matters, e.g. 202 (accepted) against 200. */
+  postWithStatus: <T>(path: string, body?: unknown) => send<T>("POST", path, { body: body ?? {} }),
 };
 
 /** A user-facing message for any error. */

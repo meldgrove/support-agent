@@ -204,8 +204,10 @@ Admins see an update icon in the header of the admin interface. It checks
 for updates on click, lists the changes of an available update with a link
 to its release notes, installs it on request (**Install now**), shows the
 progress, and says why an installation failed. The page reloads once the
-new version runs. A release with upgrade steps installs only with **Install
-anyway…**: take the steps first. With automatic updates off on the server,
+server reports the new version as running. A release with upgrade steps
+installs only with **Install anyway…**: take the steps first. Where the
+image tag set on the platform decides (Coolify), the button says to take the
+steps and change that tag instead. With automatic updates off on the server,
 the button still shows new releases, but nothing installs from the app.
 **Settings → Updates** shows the installed version, the channel (on Debian,
 admins choose it there) and when updates install by themselves.
@@ -254,14 +256,19 @@ installation; `sh updater-setup.sh remove` switches it off.
 The server installs images, not files: when a release changes
 `compose.yaml`, run `git pull` (branch `stable`) and `docker compose up -d`.
 
-**Installations set up before the update button** (updater 0.1) get it with
-the newest `compose.yaml` (branch `stable`) and the host setup again:
+**Installations set up before the update button** (updater 0.1) get it in
+three steps, as root in `/srv/support-agent`:
 
-```sh
-git pull
-docker compose up -d
-docker compose run --rm -T --pull always updater host-setup > updater-setup.sh && sudo sh updater-setup.sh
-```
+1. Run `git pull` (branch `stable`) for the newest `compose.yaml`.
+2. Set `SUPPORT_AGENT_VERSION` in `.env` to the release that brings the
+   update button, or a newer one, and run `docker compose up -d --pull always`.
+   This installs the app with the button, not only the new `updater`.
+3. Run the host setup again:
+
+   ```sh
+   docker compose run --rm -T --pull always updater host-setup > updater-setup.sh
+   sh updater-setup.sh
+   ```
 
 Until the host setup runs again, the updater follows the tag in
 `SUPPORT_AGENT_VERSION` as before, and the settings say that choosing the

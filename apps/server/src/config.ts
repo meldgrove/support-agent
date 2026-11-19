@@ -90,6 +90,8 @@ const schema = z
     /**
      * The Meldgrove Updater's API (compose.yaml's `updater`) behind the update
      * button. Unlike other variables, empty is not unset: it turns the button off.
+     * compose.yaml passes its default for an empty value too, so that works
+     * only where the app gets its environment directly.
      */
     UPDATER_URL: z.preprocess(
       (value) =>

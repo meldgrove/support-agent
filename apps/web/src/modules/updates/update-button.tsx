@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Download, ExternalLink, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
-import type { Update, UpdatesResponse } from "@support-agent/shared/api/updates";
+import type { Update, UpdatesResponse, UpdaterStatus } from "@support-agent/shared/api/updates";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,15 @@ import { errorMessage } from "@/lib/api";
 import { useAuthConfig } from "@/lib/auth-config";
 import { useFormatter } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useCheckUpdates, useInstallUpdate, useUpdates } from "./api";
+import { isSignedOut, useCheckUpdates, useInstallUpdate, useUpdates } from "./api";
 import { messages } from "./messages";
 import { DEPLOYMENT_GUIDE } from "./updates-section";
 import {
+  adoptWaiting,
+  afterInstallAnswer,
   buttonState,
+  follow,
+  installAction,
   installOutcome,
   installsAt,
   loadWaiting,
@@ -26,6 +30,7 @@ import {
   saveWaiting,
   startWaiting,
   type ButtonState,
+  type Tracked,
   type Waiting,
 } from "./state";
 
@@ -50,47 +55,76 @@ function AdminUpdateButton() {
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ update: Update; attention: boolean } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  /** The failure of the installation this page followed. */
+  const [tracked, setTracked] = useState<Tracked | null>(null);
+  /** An installation the admin stopped waiting for: not followed again. */
+  const [ignored, setIgnored] = useState<{ version: string; startedAt: string | null } | null>(null);
   const finished = useRef(false);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(reloadTimer.current), []);
 
+  const current = useRef(waiting);
   const setWaiting = (next: Waiting | null) => {
+    current.current = next;
     saveWaiting(next);
     setWaitingState(next);
   };
 
   const response = updates.data;
+  const receivedAt = updates.dataUpdatedAt;
   const failing = updates.isError;
-  // An installation started elsewhere (another admin, automatically) reloads this page too.
-  const runningVersion = response?.updater?.installing?.version;
+  const signedOut = isSignedOut(updates.error);
+  // Follow an installation that a status reports (a poll, a check, a refusal):
+  // another admin's, an automatic one, or a newer one than the attempt.
+  const running = response?.updater?.installing ?? null;
   useEffect(() => {
-    if (runningVersion && !waiting) setWaiting(startWaiting(runningVersion, response, Date.now()));
+    if (!running || !response || finished.current || install.isPending) return;
+    if (waiting?.version === running.version) return;
+    if (
+      ignored?.version === running.version &&
+      (ignored.startedAt ?? running.startedAt) === running.startedAt
+    )
+      return;
+    setTracked(null);
+    setWaiting(adoptWaiting(response, Date.now()));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when an installation appears
-  }, [runningVersion, waiting]);
+  }, [running?.version, running?.startedAt, waiting?.version, install.isPending]);
 
   useEffect(() => {
-    if (!waiting || finished.current) return;
+    if (!waiting || finished.current || install.isPending) return;
     if (failing) {
-      if (!waiting.outage) setWaiting({ ...waiting, outage: true });
+      // Expected while the app restarts; signed out: keep the attempt for a later page load.
+      if (!signedOut && !waiting.outage) setWaiting({ ...waiting, outage: true });
       return;
     }
     if (!response) return;
-    const outcome = installOutcome(waiting, response);
+    const followed = follow(waiting, response, receivedAt);
+    const outcome = installOutcome(followed, response, receivedAt, Date.now());
     if (outcome === "done") {
       finished.current = true;
       saveWaiting(null);
       toast.success(t("updated", { version: waiting.version }));
-      setTimeout(() => window.location.reload(), 1_500);
+      reloadTimer.current = setTimeout(() => window.location.reload(), 1_500);
     } else if (outcome === "failed") {
+      const last = response.updater?.last;
+      setTracked(last ? { version: last.version, finishedAt: last.finishedAt } : null);
       setWaiting(null);
       setOpen(true);
+    } else if (outcome === "not-started") {
+      setWaiting(null);
+      toast.error(t("notStarted"), { description: followed.reason ?? undefined });
+    } else if (followed !== waiting) {
+      setWaiting(followed);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- on every answer
-  }, [updates.dataUpdatedAt, updates.errorUpdatedAt, failing, waiting]);
+  }, [receivedAt, updates.errorUpdatedAt, failing, waiting, install.isPending]);
 
   const now = Date.now();
-  const state = buttonState({ response, waiting, checking: check.isPending, failing, now });
+  const input = { response, receivedAt, waiting, tracked, failing, now };
+  const state = buttonState({ ...input, checking: check.isPending });
   if (!state) return null;
   // The popover keeps its content while a check from it runs.
-  const content = buttonState({ response, waiting, checking: false, failing, now });
+  const content = buttonState({ ...input, checking: false });
   const status = response?.updater ?? null;
   const installedVersion = status?.installed ?? response?.app.version ?? null;
 
@@ -104,7 +138,9 @@ function AdminUpdateButton() {
       }
       const next = buttonState({
         response: result,
+        receivedAt: Date.now(),
         waiting: null,
+        tracked,
         checking: false,
         failing: false,
         now: Date.now(),
@@ -121,14 +157,25 @@ function AdminUpdateButton() {
   };
 
   const runInstall = async (update: Update) => {
-    const before = response;
-    try {
-      await install.mutateAsync(update.version);
-      finished.current = false;
-      setWaiting(startWaiting(update.version, before, Date.now()));
-    } catch (error) {
-      toast.error(errorMessage(error));
-    }
+    // Remembered before the request: an answer that never arrives must not lose it.
+    const attempt = startWaiting(update.version, response, Date.now());
+    finished.current = false;
+    setTracked(null);
+    setIgnored(null);
+    setWaiting(attempt);
+    const answer = await install.mutateAsync(update.version);
+    // Unless an answer of the status already settled the attempt.
+    const latest = current.current;
+    const next = afterInstallAnswer(latest?.since === attempt.since ? latest : attempt, answer, Date.now());
+    if (latest?.since === attempt.since && !finished.current) setWaiting(next.waiting);
+    if (next.error) toast.error(next.error);
+  };
+
+  const stopWaiting = () => {
+    if (!waiting) return;
+    const startedAt = running?.version === waiting.version ? running.startedAt : waiting.startedAt;
+    setIgnored({ version: waiting.version, startedAt });
+    setWaiting(null);
   };
 
   const askInstall = (update: Update, attention: boolean) => {
@@ -177,8 +224,9 @@ function AdminUpdateButton() {
                 t={t}
                 appName={appName}
                 installedVersion={installedVersion}
-                installable={status?.mode !== "off"}
+                status={status}
                 onInstall={askInstall}
+                onStopWaiting={waiting && !signedOut ? stopWaiting : null}
               />
               <Separator />
               <PopoverFooter
@@ -334,17 +382,20 @@ function PopoverBody(props: {
   t: T;
   appName: string;
   installedVersion: string | null;
-  /** False in mode off: the popover shows the update, but nothing can install from here. */
-  installable: boolean;
+  /** Decides what can install from here (`installAction`). */
+  status: UpdaterStatus | null;
   onInstall: (update: Update, attention: boolean) => void;
+  /** While the page follows an installation. */
+  onStopWaiting: (() => void) | null;
 }) {
-  const { state, t } = props;
+  const { state, t, status } = props;
+  const action = (attention: boolean) => (status ? installAction(status, attention) : "off");
   switch (state.kind) {
     case "available":
       return (
         <>
           <UpdateDetails update={state.update} t={t} title={t("available")} />
-          {props.installable ? (
+          {action(false) === "install" ? (
             <Button size="sm" onClick={() => props.onInstall(state.update, false)}>
               <Download />
               {t("installNow")}
@@ -358,7 +409,9 @@ function PopoverBody(props: {
               <AttentionBody
                 update={state.attention}
                 t={t}
-                onInstall={props.installable ? props.onInstall : null}
+                appName={props.appName}
+                action={action(true)}
+                onInstall={props.onInstall}
               />
             </>
           ) : null}
@@ -366,9 +419,17 @@ function PopoverBody(props: {
       );
     case "attention":
       return (
-        <AttentionBody update={state.update} t={t} onInstall={props.installable ? props.onInstall : null} />
+        <AttentionBody
+          update={state.update}
+          t={t}
+          appName={props.appName}
+          action={action(true)}
+          onInstall={props.onInstall}
+        />
       );
-    case "failed":
+    case "failed": {
+      const { update, attention } = state;
+      const retry = update ? action(attention) : null;
       return (
         <div className="grid gap-2">
           <p className="text-destructive flex items-center gap-2 font-medium">
@@ -377,16 +438,19 @@ function PopoverBody(props: {
           </p>
           {state.message ? <p className="text-muted-foreground break-words">{state.message}</p> : null}
           {props.installedVersion ? <p>{t("stillRunning", { version: props.installedVersion })}</p> : null}
-          {props.installable ? (
-            <Button size="sm" variant="outline" onClick={() => props.onInstall(state.update, false)}>
+          {update && retry === "install" ? (
+            <Button size="sm" variant="outline" onClick={() => props.onInstall(update, attention)}>
               <RefreshCw />
               {t("tryAgain")}
             </Button>
-          ) : (
+          ) : retry === "tag" ? (
+            <TagNote t={t} appName={props.appName} version={state.version} />
+          ) : retry === "off" ? (
             <OffNote t={t} />
-          )}
+          ) : null}
         </div>
       );
+    }
     case "installing":
       return (
         <div className="grid gap-2">
@@ -405,9 +469,16 @@ function PopoverBody(props: {
           ) : null}
           <p>{t("restarts", { app: props.appName })}</p>
           {state.slow ? (
-            <p className="text-destructive break-words">
-              {t("slow", { command: `journalctl -u ${HOST_UNIT}` })}
-            </p>
+            <>
+              <p className="text-destructive break-words">
+                {t("slow", { command: `journalctl -u ${HOST_UNIT}` })}
+              </p>
+              {props.onStopWaiting ? (
+                <Button size="sm" variant="outline" onClick={props.onStopWaiting}>
+                  {t("stopWaiting")}
+                </Button>
+              ) : null}
+            </>
           ) : null}
         </div>
       );
@@ -435,11 +506,17 @@ function OffNote({ t }: { t: T }) {
   );
 }
 
+/** An attention release that the image tag set where the app is deployed does not reach. */
+function TagNote({ t, appName, version }: { t: T; appName: string; version: string }) {
+  return <p className="text-muted-foreground">{t("attentionTag", { app: appName, version })}</p>;
+}
+
 function AttentionBody(props: {
   update: Update;
   t: T;
-  /** null in mode off: nothing can install from here. */
-  onInstall: ((update: Update, attention: boolean) => void) | null;
+  appName: string;
+  action: "install" | "off" | "tag";
+  onInstall: (update: Update, attention: boolean) => void;
 }) {
   const { update, t } = props;
   return (
@@ -450,10 +527,12 @@ function AttentionBody(props: {
       </p>
       <p className="text-muted-foreground">{t("attentionText")}</p>
       <ReleaseNotesLink url={update.url} t={t} />
-      {props.onInstall ? (
-        <Button size="sm" variant="outline" onClick={() => props.onInstall?.(update, true)}>
+      {props.action === "install" ? (
+        <Button size="sm" variant="outline" onClick={() => props.onInstall(update, true)}>
           {t("installAnyway")}
         </Button>
+      ) : props.action === "tag" ? (
+        <TagNote t={t} appName={props.appName} version={update.version} />
       ) : (
         <OffNote t={t} />
       )}

@@ -1,20 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UpdateChannel, UpdatesResponse } from "@support-agent/shared/api/updates";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, errorMessage } from "@/lib/api";
+import type { InstallAnswer } from "./state";
 
 export const updatesQueryKey = ["updates"] as const;
+
+/** The session ended or is no longer an admin's: polling stops (the attempt stays for a later page load). */
+export function isSignedOut(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
+function isUpdatesResponse(value: unknown): value is UpdatesResponse {
+  const body = value as Partial<UpdatesResponse> | null | undefined;
+  return typeof body?.reachable === "boolean" && typeof body.app === "object" && body.app !== null;
+}
 
 /**
  * The update status: on page load, every 5 minutes, and on window focus at
  * most once a minute; every 2 seconds while the page waits for an
- * installation. Checks run only on request.
+ * installation. Checks run only on request. Stops after a 401 or 403.
  */
 export function useUpdates(options: { waiting?: boolean } = {}) {
   return useQuery({
     queryKey: updatesQueryKey,
-    queryFn: ({ signal }) => api.get<UpdatesResponse>("/updates", undefined, signal),
+    queryFn: async ({ signal }) => {
+      const response = await api.get<unknown>("/updates", undefined, signal);
+      // Anything else (a sign-in page after a redirect) means the session is gone.
+      if (!isUpdatesResponse(response)) throw new ApiError(401, "unauthorized", "Not signed in");
+      return response;
+    },
     staleTime: 60_000,
-    refetchInterval: options.waiting ? 2_000 : 5 * 60_000,
+    refetchInterval: (query) =>
+      isSignedOut(query.state.error) ? false : options.waiting ? 2_000 : 5 * 60_000,
     refetchIntervalInBackground: options.waiting ?? false,
     // A failed request while the app restarts is expected; the next poll tries again.
     retry: false,
@@ -24,8 +41,7 @@ export function useUpdates(options: { waiting?: boolean } = {}) {
 /** The answer of a refused request (409): the reason and the latest status. */
 function refusedResponse(error: unknown): UpdatesResponse | null {
   if (!(error instanceof ApiError) || error.status !== 409) return null;
-  const body = error.body as Partial<UpdatesResponse> | undefined;
-  return body && typeof body.reachable === "boolean" && "app" in body ? (body as UpdatesResponse) : null;
+  return isUpdatesResponse(error.body) ? error.body : null;
 }
 
 function useUpdatesMutation<T>(request: (input: T) => Promise<UpdatesResponse>) {
@@ -44,8 +60,29 @@ export function useCheckUpdates() {
   return useUpdatesMutation<void>(() => api.post<UpdatesResponse>("/updates/check"));
 }
 
+/** Asks to install a version; never throws: the answer decides what the page does (`afterInstallAnswer`). */
+async function requestInstall(version: string): Promise<InstallAnswer> {
+  try {
+    const { status, data } = await api.postWithStatus<UpdatesResponse>("/updates/install", { version });
+    return { httpStatus: status, response: isUpdatesResponse(data) ? data : null, error: null };
+  } catch (error) {
+    if (!(error instanceof ApiError)) return { httpStatus: null, response: null, error: errorMessage(error) };
+    return {
+      httpStatus: error.status,
+      response: isUpdatesResponse(error.body) ? error.body : null,
+      error: error.message,
+    };
+  }
+}
+
 export function useInstallUpdate() {
-  return useUpdatesMutation<string>((version) => api.post<UpdatesResponse>("/updates/install", { version }));
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: requestInstall,
+    onSuccess: (answer) => {
+      if (answer.response) client.setQueryData(updatesQueryKey, answer.response);
+    },
+  });
 }
 
 export function useSetUpdateChannel() {
