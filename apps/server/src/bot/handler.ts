@@ -164,6 +164,8 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Pro
         channel: event.channel,
         threadTs,
         text,
+        // Only these outcomes use configured text rather than a model answer.
+        ...(result.outcome === "error" || result.outcome === "no_answer" ? { autoLinkUrls: true } : {}),
         username: agent.displayName,
         iconUrl: agent.iconUrl,
       });
@@ -186,9 +188,11 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Pro
     .update(exchanges)
     .set({
       outcome,
-      answer: keepText ? (result?.slackText ?? null) : null,
-      reason: keepText ? (result?.reason ?? null) : null,
-      searchQueries: keepText ? (result?.searchQueries ?? []) : [],
+      // Maintenance may have cleared this exchange while the model was running.
+      answer: sql`case when ${exchanges.textRemovedAt} is null then ${keepText ? (result?.slackText ?? null) : null} end`,
+      reason: sql`case when ${exchanges.textRemovedAt} is null then ${keepText ? (result?.reason ?? null) : null} end`,
+      searchQueries: sql`case when ${exchanges.textRemovedAt} is null
+        then ${JSON.stringify(keepText ? (result?.searchQueries ?? []) : [])}::jsonb else '[]'::jsonb end`,
       sources: cited.map((source) => ({ title: source.title, url: source.url })),
       provider: result?.provider ?? null,
       model: result?.model ?? null,

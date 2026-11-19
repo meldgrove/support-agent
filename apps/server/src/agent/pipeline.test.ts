@@ -150,7 +150,7 @@ describe("runPipeline", () => {
       input({ agent: agent({ instructions: "Tickets: https://help.example.org/new." }) }),
     );
     expect(result.slackText).toBe(
-      "Use <https://it.example.org/password/|the portal>, <https://it.example.org/wifi|Wi-Fi> or <https://help.example.org/new|the helpdesk>. Not this.\n\n:page_facing_up: <https://it.example.org/password|Reset your password>",
+      "Use <https://it.example.org/password|the portal>, <https://it.example.org/wifi|Wi-Fi> or <https://help.example.org/new|the helpdesk>. Not this.\n\n:page_facing_up: <https://it.example.org/password|Reset your password>",
     );
   });
 

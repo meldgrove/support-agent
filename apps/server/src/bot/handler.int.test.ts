@@ -213,7 +213,10 @@ describe("handleMessage", () => {
       { db: getDb(), slack: slack.port, config: () => botConfig(agent()), runPipeline: run, alert },
       message(),
     );
-    expect(slack.posted[0]?.text).toBe(DEFAULT_APP_SETTINGS.errorMessage);
+    expect(slack.posted[0]).toMatchObject({
+      text: DEFAULT_APP_SETTINGS.errorMessage,
+      autoLinkUrls: true,
+    });
     expect(alert).toHaveBeenCalledWith(
       expect.objectContaining({ id: AGENT_ID }),
       "C0SUPPORT",
@@ -235,6 +238,28 @@ describe("handleMessage", () => {
     expect(slack.reactions).toHaveLength(0);
     const [row] = await getDb().select().from(exchanges);
     expect(row).toMatchObject({ outcome: "silent", question: null, answer: null, reason: null });
+  });
+
+  it("does not restore text when maintenance clears an in-flight exchange", async () => {
+    const db = getDb();
+    const runPipeline = async () => {
+      await putSetting(db, "app", { ...DEFAULT_APP_SETTINGS, retentionDays: 0 });
+      await runMaintenance(db);
+      return result();
+    };
+    await handleMessage(
+      { db, slack: fakeSlack().port, config: () => botConfig(agent()), runPipeline },
+      message(),
+    );
+    const [row] = await db.select().from(exchanges);
+    expect(row?.textRemovedAt).toBeInstanceOf(Date);
+    expect(row).toMatchObject({
+      outcome: "answered",
+      question: null,
+      answer: null,
+      reason: null,
+      searchQueries: [],
+    });
   });
 
   it("notes images it could not read", async () => {

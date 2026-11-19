@@ -73,6 +73,8 @@ export function createApp() {
 
   app.route("/", health);
 
+  // Sign-in sends small JSON requests. Limit them before Better Auth parses them.
+  app.use("/api/auth/*", bodyLimit({ maxSize: 64 * 1024 }));
   app.on(["GET", "POST"], "/api/auth/*", (c) => {
     // Replace any client-supplied value with the address the app trusts.
     const headers = new Headers(c.req.raw.headers);
@@ -91,7 +93,8 @@ export function createApp() {
 
   const api = new Hono<AppEnv>();
   // Test console images: three of about 5 MB each, base64-encoded.
-  api.use("*", bodyLimit({ maxSize: 24 * 1024 * 1024 }), sameOrigin, authenticate);
+  const limitApiBody = bodyLimit({ maxSize: 24 * 1024 * 1024 });
+  api.use("*", sameOrigin, authenticate, (c, next) => (c.get("principal") ? limitApiBody(c, next) : next()));
   for (const module of API_MODULES) api.route("/", module);
   app.route("/api/v1", api);
   app.all("/api/*", (c) => c.json({ error: { code: "not_found", message: "Not found" } }, 404));

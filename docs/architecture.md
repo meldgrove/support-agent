@@ -111,9 +111,10 @@ When the Slack tokens change, it reconnects.
 - **Logs and error reports** carry identifiers, never message texts or keys.
 - **Model providers** receive the question, the thread and the passages
   found. Choose providers your organization allows for that data.
-- **Prompt injection:** retrieved passages and messages are marked as data,
-  and the bot has no tools besides search: the worst a malicious message or
-  page can do is change one answer.
+- **Prompt injection:** retrieved passages and Slack messages are marked as
+  data. They can still influence search queries and answers. The model
+  cannot choose a search destination or run other tools. Limit each
+  source to material its Slack audience may read.
 
 ## Sign-in and roles
 

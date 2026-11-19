@@ -22,39 +22,60 @@ export function linkableUrls(
   return [...urls, ...urlsIn(instructions)];
 }
 
-/** Undoes HTML escaping of &, < and >, however often it was applied (Slack's, or a passage's own). */
+/** Undo one layer of Slack or HTML escaping. */
 function unescapeHtml(text: string): string {
-  let result = text;
-  for (let previous = ""; previous !== result;) {
-    previous = result;
-    result = result.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-  }
-  return result;
+  return text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 
-/** A URL as compared with the linkable ones: unescaped, without trailing slashes. */
-const linkKey = (url: string) => unescapeHtml(url).replace(/\/+$/, "");
+/** Allow harmless formatting differences, while preferring the exact URL. */
+function linkKey(url: string): string {
+  // Collapse nested escaping only for fallback comparison. Exact URLs keep their bytes.
+  const unescaped = url.replace(/&(?:amp;)*(amp|lt|gt);/g, (_match, entity: string) =>
+    unescapeHtml(`&${entity};`),
+  );
+  const path = unescaped.split(/[?#]/, 1)[0]!;
+  return path.replace(/\/+$/, "") + unescaped.slice(path.length);
+}
 
-function convertInline(text: string, linkable: ReadonlySet<string>): string {
-  let result = escapeMrkdwn(text);
-  // Links first, so their labels keep any emphasis. Only URLs from the
-  // passages or the instructions become links; any other link the model
-  // writes (made up, or asked for in a message) keeps only its label.
-  result = result.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label: string, url: string) => {
-    const target = unescapeHtml(url);
-    return linkable.has(linkKey(target)) ? `<${escapeMrkdwn(target)}|${label.replace(/\|/g, "/")}>` : label;
-  });
+/** Keep Slack markup delimiters and credentials out of link targets. */
+function isSlackLink(url: string): boolean {
+  if (!/^https?:\/\//i.test(url) || /[<>|\s\p{Cc}]/u.test(url)) return false;
+  const parsed = URL.parse(url);
+  return Boolean(parsed && !parsed.username && !parsed.password);
+}
+
+function convertInline(text: string, findLink: (url: string) => string | null | undefined): string {
+  const targets: string[] = [];
+  let result = escapeMrkdwn(text.replaceAll("\uE000", ""));
+  // Hold URLs aside so emphasis formatting cannot change an approved target.
+  result = result.replace(
+    /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/gi,
+    (_match, label: string, url: string) => {
+      const target = findLink(unescapeHtml(url));
+      if (!target) return label;
+      const index = targets.push(escapeMrkdwn(target)) - 1;
+      return `<\uE000${index}\uE000|${label.replace(/\|/g, "/")}>`;
+    },
+  );
   const BOLD = "\u0001";
   result = result.replace(/\*\*(.+?)\*\*/g, `${BOLD}$1${BOLD}`).replace(/__(.+?)__/g, `${BOLD}$1${BOLD}`);
   result = result.replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)\*(?!\w)/g, "$1_$2_");
   result = result.replaceAll(BOLD, "*");
   result = result.replace(/~~(.+?)~~/g, "~$1~");
-  return result;
+  return result.replace(/\uE000(\d+)\uE000/g, (_token, index: string) => targets[Number(index)]!);
 }
 
 /** Slack mrkdwn from the model's Markdown; links only to `linkable` URLs (see `linkableUrls`). */
 export function markdownToMrkdwn(markdown: string, linkable: Iterable<string>): string {
-  const allowed = new Set([...linkable].map(linkKey));
+  const allowed = new Set<string>();
+  const fallbackTargets = new Map<string, string | null>();
+  for (const target of linkable) {
+    if (!isSlackLink(target) || allowed.has(target)) continue;
+    allowed.add(target);
+    const key = linkKey(target);
+    fallbackTargets.set(key, fallbackTargets.has(key) ? null : target);
+  }
+  const findLink = (url: string) => (allowed.has(url) ? url : fallbackTargets.get(linkKey(url)));
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const output: string[] = [];
   let inCode = false;
@@ -70,12 +91,12 @@ export function markdownToMrkdwn(markdown: string, linkable: Iterable<string>): 
     }
     const heading = /^\s{0,3}#{1,6}\s+(.*)$/.exec(line);
     if (heading) {
-      output.push(`*${convertInline(heading[1]!.replace(/\*\*/g, ""), allowed)}*`);
+      output.push(`*${convertInline(heading[1]!.replace(/\*\*/g, ""), findLink)}*`);
       continue;
     }
     const bullet = /^(\s*)[-*+]\s+(.*)$/.exec(line);
     if (bullet) {
-      output.push(`${bullet[1]}• ${convertInline(bullet[2]!, allowed)}`);
+      output.push(`${bullet[1]}• ${convertInline(bullet[2]!, findLink)}`);
       continue;
     }
     // Inline code keeps its content unchanged.
@@ -85,7 +106,7 @@ export function markdownToMrkdwn(markdown: string, linkable: Iterable<string>): 
         .map((part) =>
           part.startsWith("`") && part.endsWith("`") && part.length > 1
             ? escapeMrkdwn(part)
-            : convertInline(part, allowed),
+            : convertInline(part, findLink),
         )
         .join(""),
     );
@@ -106,10 +127,10 @@ export function sourcesLine(sources: { title: string; url: string | null }[]): s
   const seen = new Set<string>();
   const links: string[] = [];
   for (const source of sources) {
-    if (!source.url || seen.has(source.url)) continue;
+    if (!source.url || !isSlackLink(source.url) || seen.has(source.url)) continue;
     seen.add(source.url);
     const label = escapeMrkdwn(source.title.replace(/[|\n]/g, " ").trim() || source.url);
-    links.push(`<${source.url}|${label}>`);
+    links.push(`<${escapeMrkdwn(source.url)}|${label}>`);
   }
   return links.length > 0 ? `:page_facing_up: ${links.join(" · ")}` : null;
 }

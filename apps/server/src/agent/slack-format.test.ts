@@ -33,10 +33,10 @@ describe("markdownToMrkdwn", () => {
   it("keeps only links to linkable URLs; other links become their label", () => {
     expect(
       markdownToMrkdwn(
-        "Open [the form](https://it.example.org/form?a=1&b=2/) or [this](https://x.example/)",
+        "Open [the form](https://it.example.org/form/?a=1&b=2) or [this](https://x.example/)",
         ["https://it.example.org/form?a=1&b=2"],
       ),
-    ).toBe("Open <https://it.example.org/form?a=1&amp;b=2/|the form> or this");
+    ).toBe("Open <https://it.example.org/form?a=1&amp;b=2|the form> or this");
   });
 
   it("compares URLs without their HTML escaping", () => {
@@ -45,7 +45,39 @@ describe("markdownToMrkdwn", () => {
     ).toBe("<https://example.org/?a=1&amp;b=2|portal>");
     expect(
       markdownToMrkdwn("[portal](https://example.org/?a=1&b=2)", ["https://example.org/?a=1&amp;b=2"]),
-    ).toBe("<https://example.org/?a=1&amp;b=2|portal>");
+    ).toBe("<https://example.org/?a=1&amp;amp;b=2|portal>");
+  });
+  it("prefers exact URLs and never guesses between different trusted targets", () => {
+    const url = "https://example.org/guide?next=/home";
+    const other = "https://example.org/guide/?next=/home";
+    const withSlashInQuery = "https://example.org/guide?next=/home/";
+    expect(markdownToMrkdwn(`[guide](${url})`, [url, other, withSlashInQuery])).toBe(`<${url}|guide>`);
+    expect(markdownToMrkdwn("[guide](https://example.org/guide//?next=/home)", [url, other])).toBe("guide");
+    expect(markdownToMrkdwn(`[guide](${withSlashInQuery})`, [url])).toBe("guide");
+  });
+
+  it("keeps distinct approved query strings even when one resembles HTML escaping", () => {
+    const literal = "https://example.org/guide?a=1&amp;b=2";
+    const decoded = "https://example.org/guide?a=1&b=2";
+    expect(markdownToMrkdwn(`[guide](${literal})`, [literal, decoded])).toBe(
+      "<https://example.org/guide?a=1&amp;amp;b=2|guide>",
+    );
+    expect(markdownToMrkdwn(`[guide](${decoded})`, [literal, decoded])).toBe(
+      "<https://example.org/guide?a=1&amp;b=2|guide>",
+    );
+    expect(markdownToMrkdwn("[guide](https://example.org/guide/?a=1&b=2)", [literal, decoded])).toBe("guide");
+  });
+
+  it("rejects a fallback shared by URLs escaped to different depths", () => {
+    const decoded = "https://example.org/guide?a=1&b=2";
+    const doubleEscaped = "https://example.org/guide?a=1&amp;amp;b=2";
+    const candidate = "https://example.org/guide?a=1&amp;b=2";
+    expect(markdownToMrkdwn(`[guide](${candidate})`, [decoded, doubleEscaped])).toBe("guide");
+  });
+
+  it("preserves the trusted target exactly when formatting an inline link", () => {
+    const url = "https://it.example.org/a__b__c";
+    expect(markdownToMrkdwn("[**guide**](" + url + ")", [url])).toBe("<" + url + "|*guide*>");
   });
 });
 
@@ -90,6 +122,15 @@ describe("sourcesLine", () => {
       ":page_facing_up: <https://it.example.org/a|Passwords   IT> · <https://it.example.org/b|Wi-Fi &lt;guest&gt;>",
     );
     expect(sourcesLine([{ title: "x", url: null }])).toBeNull();
+  });
+  it("only renders well-formed HTTP URLs as citation targets", () => {
+    expect(
+      sourcesLine([
+        { title: "Malformed", url: "https://example.org/a|label" },
+        { title: "Malformed", url: "https://example.org/a<text>" },
+        { title: "Guide", url: "https://example.org/a?x=1&y=2" },
+      ]),
+    ).toBe(":page_facing_up: <https://example.org/a?x=1&amp;y=2|Guide>");
   });
 });
 
