@@ -4,7 +4,7 @@
 #   bot      Slack bot only
 #   migrate  apply database migrations, then exit
 
-FROM node:26.13.0-bookworm-slim AS base
+FROM node:26.13.1-bookworm-slim AS base
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
@@ -32,7 +32,7 @@ RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
 FROM base AS prod-deps
 RUN npm ci --omit=dev --workspace @support-agent/server --include-workspace-root=false --no-audit --no-fund
 
-FROM node:26.13.0-bookworm-slim AS runtime
+FROM node:26.13.1-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
