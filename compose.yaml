@@ -1,23 +1,25 @@
-# Production setup: the release image as two processes, the admin interface
-# (`web`) and the Slack bot (`bot`), after a one-off migration. The bot keeps
-# answering when the admin interface is down or being updated.
+# Production on a Linux server (Debian, Ubuntu) with Docker Compose: the
+# release image as two processes, the admin interface (`web`) and the Slack
+# bot (`bot`), after a one-off migration, plus the `updater` for automatic
+# updates. The bot keeps answering when the admin interface is down or being
+# updated. Settings live in .env next to this file:
 #
 #   cp .env.example .env    # then set the production values (docs/configuration.md)
-#   docker compose up -d
+#   docker compose up -d --pull always
 #
 # SUPPORT_AGENT_VERSION in .env selects the release of
-# ghcr.io/meldgrove/support-agent, e.g. 0.1.0. `updater` installs new versions
-# (docs/deployment.md, Automatic updates): on a Debian server it writes the
-# installed version there; on a platform the tag set there (0.1, latest,
-# preview) decides. On a platform that does not pull images when it deploys,
-# PULL_POLICY=always makes every start pull them again.
+# ghcr.io/meldgrove/support-agent: a version such as 0.1.0, or a series such
+# as 0.1. With automatic updates (docs/deployment.md, Automatic updates), the
+# server writes each version it installs there.
 #
-# Without a PostgreSQL of your own, add compose.postgres.yaml:
-#   docker compose -f compose.yaml -f compose.postgres.yaml up -d
+# Without a PostgreSQL of your own, add compose.postgres.yaml
+# (COMPOSE_FILE=compose.yaml:compose.postgres.yaml in .env).
 #
-# Put a TLS-terminating reverse proxy in front of port 3000 (SUPPORT_AGENT_PORT
-# changes the host port) and set APP_URL to its public https URL. The bot needs
-# no public address: it connects to Slack.
+# `web` listens on 127.0.0.1:3000 (SUPPORT_AGENT_PORT changes the host port),
+# for a reverse proxy on the same server, such as Caddy, that terminates
+# HTTPS; set APP_URL to its public https URL. The bot needs no public
+# address: it connects to Slack. Back up the database. On Coolify, use
+# compose.coolify.yaml (docs/coolify.md).
 
 x-image: &image ghcr.io/meldgrove/support-agent:${SUPPORT_AGENT_VERSION:?Set SUPPORT_AGENT_VERSION to a release, e.g. 0.1.0}
 
@@ -38,7 +40,6 @@ x-app-environment: &app-environment
 
 x-app: &app
   image: *image
-  pull_policy: ${PULL_POLICY:-missing}
   env_file:
     - path: .env
       required: false
@@ -58,9 +59,8 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      # The host port for a reverse proxy on the host. Platforms with their own
-      # proxy (Coolify) reach `web` over the Docker network; set
-      # SUPPORT_AGENT_PORT to any free port when 3000 is taken.
+      # Only on the server itself, for the reverse proxy. SUPPORT_AGENT_PORT
+      # picks another host port when 3000 is taken, e.g. by another app.
       - "127.0.0.1:${SUPPORT_AGENT_PORT:-3000}:3000"
     healthcheck:
       test:
@@ -95,20 +95,18 @@ services:
       start_period: 60s
 
   # Automatic updates and the update button of admins (docs/deployment.md).
-  # Debian: the server watches the volume `updater` (`updater host-setup`),
-  # writes the version to install into SUPPORT_AGENT_VERSION and deploys it;
-  # admins choose the channel (Stable, Preview) in Settings. Coolify: set
-  # UPDATE_DEPLOY_HOOK_URL; the image tag set there decides. Neither: off,
-  # but admins still see new versions. Only the app reaches its API (no ports).
+  # It installs nothing until the server runs `updater host-setup`: then
+  # admins choose the channel (Stable, Preview) in Settings, and for each
+  # installation the server writes the version into SUPPORT_AGENT_VERSION,
+  # pulls it, runs `docker compose up --wait`, and goes back to the version
+  # before when it does not become healthy. Until then, admins still see new
+  # versions. Only the app reaches its API (no ports).
   updater:
     image: ghcr.io/meldgrove/updater:0.2
-    pull_policy: ${PULL_POLICY:-missing}
     restart: unless-stopped
     environment:
       IMAGE: *image
       VERSION_VARIABLE: SUPPORT_AGENT_VERSION
-      DEPLOY_HOOK_URL: ${UPDATE_DEPLOY_HOOK_URL:-}
-      DEPLOY_HOOK_TOKEN: ${UPDATE_DEPLOY_HOOK_TOKEN:-}
       # A release installs once it has been out this long, and only inside
       # the window, if one is set (e.g. 02:00-05:00, in the time zone TZ).
       COOLDOWN: ${UPDATE_COOLDOWN:-3d}

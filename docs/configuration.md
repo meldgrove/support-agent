@@ -59,10 +59,11 @@ process refuses them unless it runs for development on this machine
 | ------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `UPDATER_URL` | `http://updater:8080` | Where the update button of admins asks the `updater` service of `compose.yaml` ([Automatic updates](deployment.md#automatic-updates)). Under `compose.yaml`, an empty value falls back to this default. Only where the app reads its environment directly (`npm run dev`, `docker run`), empty switches the button off. |
 
-The `updater` service itself takes `UPDATE_COOLDOWN`, `UPDATE_WINDOW`, `TZ`,
-`UPDATE_DEPLOY_HOOK_URL`, `UPDATE_DEPLOY_HOOK_TOKEN` and, for a private
-image, `UPDATE_REGISTRY_USERNAME` and `UPDATE_REGISTRY_PASSWORD` (see
-`compose.yaml`).
+The `updater` service itself takes `UPDATE_COOLDOWN`, `UPDATE_WINDOW`, `TZ`
+and, for a private image, `UPDATE_REGISTRY_USERNAME` and
+`UPDATE_REGISTRY_PASSWORD` (see `compose.yaml`). On Coolify, it also takes
+`UPDATE_DEPLOY_HOOK_URL` and `UPDATE_DEPLOY_HOOK_TOKEN`
+([Coolify](coolify.md#automatic-updates)).
 
 ## Error reports
 
