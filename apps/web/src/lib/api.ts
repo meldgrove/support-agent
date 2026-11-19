@@ -55,7 +55,13 @@ async function send<T>(
     signal: options.signal,
   });
   if (response.status === 204) return { status: 204, data: undefined as T };
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (error) {
+    // The status arrived, the body broke off: keep the status (a 202 still counts).
+    throw new ApiError(response.status, "unreadable_body", errorMessage(error));
+  }
   let data: unknown;
   try {
     data = text ? JSON.parse(text) : null;

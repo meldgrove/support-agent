@@ -267,6 +267,26 @@ describe("UpdateButton reconciles an unconfirmed attempt for 60 seconds", () => 
     expect(stored()).toBeNull();
   });
 
+  it("gives up at the deadline when no status request could run (offline)", async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(toast, "error");
+    storeAttempt();
+    const fetch = answerFetch(() => json(host()));
+    onlineManager.setOnline(false);
+    try {
+      renderButton();
+      await advance(RECONCILE_MS);
+      // The query waits for the network: no request ran, the timer ended the attempt anyway.
+      expect(fetch).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalledWith("The installation could not be confirmed", {
+        description: "Failed to fetch",
+      });
+      expect(stored()).toBeNull();
+    } finally {
+      act(() => onlineManager.setOnline(true));
+    }
+  });
+
   it("says that the installation did not start when the updater answered without it", async () => {
     vi.useFakeTimers();
     const error = vi.spyOn(toast, "error");
@@ -325,6 +345,26 @@ describe("UpdateButton after the session ended", () => {
 });
 
 describe("UpdateButton install answers through the app", () => {
+  it("follows a 202 whose body breaks off", async () => {
+    answerFetch((url) =>
+      url === "/api/v1/updates/install"
+        ? new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new TypeError("network error"));
+              },
+            }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          )
+        : json(host()),
+    );
+    renderButton();
+
+    await confirmInstall();
+    expect(await screen.findByRole("button", { name: "Installing 0.2.1…" })).toBeInTheDocument();
+    expect(stored()).toMatchObject({ version: "0.2.1", confirmed: true });
+  });
+
   it("keeps the attempt when the updater answers 503", async () => {
     const busy = { ...host(), error: "The updater is busy. Try again in a minute." };
     stubFetch({ body: host() }, { status: 503, body: busy });

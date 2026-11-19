@@ -128,13 +128,12 @@ function AdminUpdateButton() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- on every answer
   }, [receivedAt, updates.errorUpdatedAt, failing, waiting, install.isPending]);
 
-  // An unconfirmed attempt ends 60 s after it started, whatever the polls
-  // return (errors, 5xx, no updater, requests that hang). After a reload past
-  // that time, once the first status request of the page settled. Signed
-  // out: kept for a later page load.
-  const settled = updates.isFetched;
+  // An unconfirmed attempt ends 60 s after it started (its stored start
+  // time), whatever the polls return or whether one ran at all (errors, 5xx,
+  // no updater, requests that hang or wait for the network). Signed out:
+  // kept for a later page load.
   useEffect(() => {
-    if (deadline === null || !settled || signedOut) return;
+    if (deadline === null || signedOut) return;
     const since = current.current?.since;
     const timer = setTimeout(
       () => {
@@ -148,7 +147,7 @@ function AdminUpdateButton() {
     );
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- per attempt
-  }, [deadline, settled, signedOut]);
+  }, [deadline, signedOut]);
 
   // Shows "This takes longer than expected" after 15 minutes, also when no poll returns.
   const [, setSlowTick] = useState(0);
