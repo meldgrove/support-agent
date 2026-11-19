@@ -1,21 +1,23 @@
 # Deployment
 
-For the person who runs the support agent on a server: requirements, the
-setup on [Coolify](#coolify) or on a [Debian server](#debian), sign-in,
-upgrades, automatic updates, backups and troubleshooting. Every environment
+For the person who runs the support agent on a Linux server, such as a VPS
+with Debian or Ubuntu: requirements, [setup](#setup), sign-in, upgrades,
+automatic updates, backups and troubleshooting. To run it on Coolify
+instead, see [Coolify](coolify.md). Every environment
 variable is described in [Configuration](configuration.md); setting up
 Slack, models and agents happens afterwards in the admin interface
 ([Admin guide](admin-guide.md)).
 
 ## Requirements
 
-- **Coolify, or a server with Debian 12 or later** (or a similar system with
-  systemd and apt, such as Ubuntu 24.04), with Docker Engine and its Compose
-  plugin.
-- **PostgreSQL 16 or later**, the only stateful dependency.
-- **A reverse proxy that terminates HTTPS** for the admin interface:
-  Coolify's own, or Caddy on Debian. The bot needs no public address: it
-  opens an outgoing connection to Slack.
+- **A server with Debian 12 or later** (or a similar system with systemd and
+  apt, such as Ubuntu 24.04), with Docker Engine and its Compose plugin, and
+  a domain name that points at it.
+- **PostgreSQL 16 or later**, the only stateful dependency: a database of
+  your own, or the one `compose.postgres.yaml` adds.
+- **Caddy** (or another reverse proxy on the server) that terminates HTTPS
+  for the admin interface. The bot needs no public address: it opens an
+  outgoing connection to Slack.
 - **An OpenID Connect provider** for sign-in: Keycloak, Microsoft Entra ID,
   Google, or "Sign in with Slack".
 - Outgoing HTTPS to Slack, to the model providers and to the knowledge
@@ -36,14 +38,15 @@ preview too: `0.1.1-preview.3` (three changes after 0.1.0) and `preview`.
 | `Dockerfile`            | The image. Its command (`all`, `web`, `bot`, `migrate`) picks the role.                             |
 | `compose.yaml`          | A one-off `migrate`, the admin interface (`web`), the Slack bot (`bot`) and the optional `updater`. |
 | `compose.postgres.yaml` | Adds a PostgreSQL 18 container, for servers without a database of their own.                        |
+| `compose.coolify.yaml`  | The same as `compose.yaml`, for [Coolify](coolify.md).                                              |
 
 The image runs as an unprivileged user (uid 1000). `web` listens on port
 3000, published on `127.0.0.1:3000` for a reverse proxy on the same machine.
 When another service holds that port (Docker reports `port is already
-allocated`), set `SUPPORT_AGENT_PORT` to a free one. A platform with its own
-proxy, such as Coolify, reaches `web` through the Docker network and does not
-use this port, so any free port will do. The branch `stable` is at the newest
-release; `main` has changes that are not released yet.
+allocated`), set `SUPPORT_AGENT_PORT` to a free one. With several apps on
+one server, give each its own port and its own site in the Caddyfile. The
+branch `stable` is at the newest release; `main` has changes that are not
+released yet.
 
 ### One container
 
@@ -52,32 +55,7 @@ with `RUN_MIGRATIONS=true`: the admin interface and the bot then share one
 process. Separate `web` and `bot` containers are more robust: the bot keeps
 answering while the admin interface is redeployed.
 
-## Coolify
-
-1. **Database:** create a PostgreSQL resource (16 or later) and copy its
-   internal URL.
-2. **Application:** create a Docker Compose resource from the public
-   repository `https://github.com/meldgrove/support-agent`, branch `stable`,
-   Docker Compose location `/compose.yaml`. Under Advanced, set Auto deploy
-   to "Manual deployments only", so that only releases deploy, and turn on
-   "Connect To Predefined Network", so that the app reaches the database.
-3. **Domain:** assign the domain, such as `https://support.example.org`, to
-   `web`, port 3000. `bot` needs none.
-4. **Register the app at your provider** with the redirect URL
-   `<APP_URL>/api/auth/callback/oidc` ([Sign-in](#sign-in)).
-5. **Environment variables** of the resource: `SUPPORT_AGENT_VERSION` (a
-   series such as `0.1`, see [Automatic updates](#automatic-updates)),
-   `APP_URL` (the domain), `DATABASE_URL` (the database's internal URL), new
-   secrets (`openssl rand -base64 32` for `AUTH_SECRET` and
-   `ENCRYPTION_KEY`), the `OIDC_*` values and your address in
-   `ADMIN_EMAILS`.
-6. **Deploy**, open `APP_URL` and sign in with an address from
-   `ADMIN_EMAILS`.
-7. **Continue in the admin interface:** the overview page lists the steps
-   (Slack, a provider, a knowledge source, an agent).
-8. **Automatic updates:** set them up [on Coolify](#on-coolify).
-
-## Debian
+## Setup
 
 On a server with Debian 12 or later, or a similar system such as Ubuntu,
 run the commands as root (`sudo -i`).
@@ -106,7 +84,9 @@ run the commands as root (`sudo -i`).
    `DATABASE_URL=postgres://support_agent:<POSTGRES_PASSWORD>@postgres:5432/support_agent`.
 5. **Start:** `docker compose up -d --pull always`.
 6. **HTTPS:** point the domain's DNS at the server, install Caddy
-   (`apt install caddy`), and replace `/etc/caddy/Caddyfile` with:
+   (`apt install caddy`), and put this site into `/etc/caddy/Caddyfile`, in
+   place of the package's example site `:80` and next to the sites of other
+   apps:
 
    ```text
    support.example.org {
@@ -120,7 +100,7 @@ run the commands as root (`sudo -i`).
 7. Open `APP_URL` and sign in with an address from `ADMIN_EMAILS`.
 8. **Continue in the admin interface:** the overview page lists the steps
    (Slack, a provider, a knowledge source, an agent).
-9. **Automatic updates:** set them up [on Debian](#on-debian).
+9. **Automatic updates:** [set them up](#setup-on-the-server).
 
 ## Sign-in
 
@@ -168,14 +148,11 @@ restart policy on the bot container.
 
 1. Read the release notes. Releases with **Upgrade steps needed** start a
    new series and list what to do.
-2. Take the steps, then move to the new series:
-   - **Coolify:** change `SUPPORT_AGENT_VERSION` in the resource's
-     environment variables and redeploy. Coolify reads `compose.yaml` from
-     `stable`, which is at the newest release.
-   - **Debian:** in `/srv/support-agent`, run `git pull` (the newest
-     release's `compose.yaml`), then either **Install anyway…** under the
-     [update button](#update-button), or change `SUPPORT_AGENT_VERSION` in
-     `.env` and run `docker compose up -d --pull always`.
+2. Take the steps, then move to the new series: in `/srv/support-agent`, run
+   `git pull` (the newest release's `compose.yaml`), then either
+   **Install anyway…** under the [update button](#update-button), or change
+   `SUPPORT_AGENT_VERSION` in `.env` and run
+   `docker compose up -d --pull always`.
 
 The `migrate` service applies database migrations before `web` and `bot`
 start.
@@ -184,7 +161,8 @@ start.
 
 The `updater` service of `compose.yaml`
 ([meldgrove/updater](https://github.com/meldgrove/updater)) looks for new
-versions every hour and installs them. Set up [backups](#backups) first:
+versions every hour and installs them once the
+[host setup](#setup-on-the-server) runs. Set up [backups](#backups) first:
 migrations run without anyone watching. There are two channels:
 
 - **Stable** (default): releases. A release that needs no steps installs
@@ -205,41 +183,23 @@ for updates on click, lists the changes of an available update with a link
 to its release notes, installs it on request (**Install now**), shows the
 progress, and says why an installation failed. The page reloads once the
 server reports the new version as running. A release with upgrade steps
-installs only with **Install anyway…**: take the steps first. Where the
-image tag set on the platform decides (Coolify), the button says to take the
-steps and change that tag instead. With automatic updates off on the server,
-the button still shows new releases, but nothing installs from the app.
-**Settings → Updates** shows the installed version, the channel (on Debian,
-admins choose it there) and when updates install by themselves.
+installs only with **Install anyway…**: take the steps first. With automatic
+updates off on the server, the button still shows new releases, but nothing
+installs from the app. **Settings → Updates** shows the installed version,
+the channel (admins choose it there) and when updates install by
+themselves.
 
 Without the `updater` service, the button says that there is no update
 service; `UPDATER_URL` ([Configuration](configuration.md#updates)) points
 the app to it.
 
-### On Coolify
-
-The image tag set in `SUPPORT_AGENT_VERSION` decides what installs: a series
-such as `0.1` gets every release that needs no steps, `latest` every
-release, also those with upgrade steps, and `preview` every preview (the
-unstable channel). Admins cannot switch the channel in the app.
-
-1. Under Settings > Advanced, turn on API Access if it is off.
-2. Under Keys & Tokens > API Tokens, create a token with only the `deploy`
-   permission; clear `read`. Coolify shows it only once.
-3. In the support agent's resource, select Webhooks and copy Deploy Webhook.
-4. In the resource's environment variables, set `UPDATE_DEPLOY_HOOK_URL` to
-   the webhook and `UPDATE_DEPLOY_HOOK_TOKEN` to the token, then redeploy.
-
-The `updater` log then names the tag it watches.
-
-### On Debian
+### Setup on the server
 
 The server installs the version the updater asks for: it writes it into
 `SUPPORT_AGENT_VERSION` in `.env`, pulls the image, runs the migrations,
 starts the new version and waits until it is healthy. When it does not
 become healthy, the server restores `.env` and starts the version before,
-and the button says why. As root in `/srv/support-agent`, with
-`UPDATE_DEPLOY_HOOK_URL` empty:
+and the button says why. As root in `/srv/support-agent`:
 
 ```sh
 docker compose up -d --pull always
