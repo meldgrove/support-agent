@@ -4,19 +4,19 @@ import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { appSettingsSchema, type AppSettings } from "@support-agent/shared/api/settings";
 import { Page, PageHeader } from "@/components/layout/page";
-import { ErrorState, LoadingState } from "@/components/states";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
+import { ErrorState, LoadingState } from "@meldgrove/ui/states";
+import { Button } from "@meldgrove/ui/button";
+import { Card, CardContent, CardFooter } from "@meldgrove/ui/card";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@meldgrove/ui/field";
+import { Input } from "@meldgrove/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@meldgrove/ui/input-group";
+import { Spinner } from "@meldgrove/ui/spinner";
+import { Textarea } from "@meldgrove/ui/textarea";
 import { useLocale, useT } from "@/i18n";
 import { common } from "@/i18n/common";
 import { errorMessage } from "@/lib/api";
 import { applyServerErrors, useSchemaResolver } from "@/lib/validation";
-import { UpdatesSection } from "@/modules/updates/updates-section";
+import { AdminUpdatesSettings } from "@/modules/updates/updates";
 import { useSaveSettings, useSettings } from "./api";
 import { messages } from "./messages";
 
@@ -139,7 +139,7 @@ export function SettingsPage() {
       ) : (
         <SettingsForm settings={settings.data} />
       )}
-      <UpdatesSection />
+      <AdminUpdatesSettings />
     </Page>
   );
 }

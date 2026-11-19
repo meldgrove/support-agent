@@ -3,14 +3,14 @@ import { Link } from "@tanstack/react-router";
 import { ChevronRight, CircleCheck, Circle, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { Status } from "@support-agent/shared/api/status";
 import { Page, PageHeader } from "@/components/layout/page";
-import { ErrorState, LoadingState } from "@/components/states";
+import { ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { BotStateBadge } from "@/components/status-badges";
-import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@meldgrove/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@meldgrove/ui/card";
 import { useIsAdmin } from "@/hooks/use-me";
 import { useT } from "@/i18n";
 import { useFormatter } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { cn } from "@meldgrove/ui/utils";
 import { useStatus } from "./api";
 import { messages } from "./messages";
 

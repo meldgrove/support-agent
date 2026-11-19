@@ -1,10 +1,10 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { BookOpen, Plus } from "lucide-react";
 import { Page, PageHeader } from "@/components/layout/page";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
+import { Button } from "@meldgrove/ui/button";
+import { Card } from "@meldgrove/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@meldgrove/ui/table";
 import { useT } from "@/i18n";
 import { useKnowledgeSources } from "./api";
 import { messages } from "./messages";

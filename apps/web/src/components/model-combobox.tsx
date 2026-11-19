@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronsUpDown, Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@meldgrove/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -8,12 +8,12 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Spinner } from "@/components/ui/spinner";
+} from "@meldgrove/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@meldgrove/ui/popover";
+import { Spinner } from "@meldgrove/ui/spinner";
 import { defineMessages, useT } from "@/i18n";
 import { errorMessage } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@meldgrove/ui/utils";
 import { useProviderModels } from "@/modules/providers/api";
 
 const messages = defineMessages({

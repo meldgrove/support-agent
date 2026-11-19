@@ -18,13 +18,13 @@ import {
   type SearchResult,
 } from "@support-agent/shared/api/knowledge";
 import { CheckResultAlert } from "@/components/check-result";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ConfirmDialog } from "@meldgrove/ui/confirm-dialog";
 import { Page, PageHeader } from "@/components/layout/page";
-import { SecretField, initialSecret, secretPayload, type SecretValue } from "@/components/secret-field";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { SecretField, initialSecret, secretPayload, type SecretValue } from "@meldgrove/ui/secret-field";
+import { Alert, AlertDescription } from "@meldgrove/ui/alert";
+import { Button } from "@meldgrove/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@meldgrove/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@meldgrove/ui/collapsible";
 import {
   Field,
   FieldContent,
@@ -34,15 +34,15 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
+} from "@meldgrove/ui/field";
+import { Input } from "@meldgrove/ui/input";
+import { RadioGroup, RadioGroupItem } from "@meldgrove/ui/radio-group";
+import { Spinner } from "@meldgrove/ui/spinner";
+import { Textarea } from "@meldgrove/ui/textarea";
 import { useLocale, useT } from "@/i18n";
 import { common } from "@/i18n/common";
 import { errorMessage } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@meldgrove/ui/utils";
 import { applyServerErrors, firstMessage, useSchemaResolver } from "@/lib/validation";
 import {
   useCreateKnowledgeSource,

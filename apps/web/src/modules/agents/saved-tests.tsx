@@ -8,10 +8,10 @@ import {
   type AgentTest,
   type AgentTestInput,
 } from "@support-agent/shared/api/agents";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@meldgrove/ui/alert";
+import { Badge } from "@meldgrove/ui/badge";
+import { Button } from "@meldgrove/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@meldgrove/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -19,13 +19,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@meldgrove/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@meldgrove/ui/dropdown-menu";
 import {
   Field,
   FieldContent,
@@ -34,13 +34,13 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
-import { ConfirmDialog } from "@/components/confirm-dialog";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+} from "@meldgrove/ui/field";
+import { Input } from "@meldgrove/ui/input";
+import { RadioGroup, RadioGroupItem } from "@meldgrove/ui/radio-group";
+import { Spinner } from "@meldgrove/ui/spinner";
+import { Textarea } from "@meldgrove/ui/textarea";
+import { ConfirmDialog } from "@meldgrove/ui/confirm-dialog";
+import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { OutcomeBadge } from "@/components/status-badges";
 import { useLocale, useT } from "@/i18n";
 import { common } from "@/i18n/common";

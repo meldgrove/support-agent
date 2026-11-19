@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { vi } from "vitest";
+import { UIProvider } from "@meldgrove/ui/i18n";
 import { LocaleContext } from "@/i18n";
 import type { Locale } from "@/i18n/locales";
 
@@ -10,9 +11,12 @@ export function renderWithProviders(ui: ReactNode, options: { locale?: Locale } 
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const locale = options.locale ?? "en";
   return render(
     <QueryClientProvider client={client}>
-      <LocaleContext.Provider value={options.locale ?? "en"}>{ui}</LocaleContext.Provider>
+      <LocaleContext.Provider value={locale}>
+        <UIProvider locale={locale}>{ui}</UIProvider>
+      </LocaleContext.Provider>
     </QueryClientProvider>,
   );
 }

@@ -2,9 +2,9 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { ImagePlus, MessageSquarePlus, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import type { AgentInput, AgentTestInput, PreviewResult } from "@support-agent/shared/api/agents";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@meldgrove/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@meldgrove/ui/card";
+import { Checkbox } from "@meldgrove/ui/checkbox";
 import {
   Field,
   FieldContent,
@@ -13,10 +13,10 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@/components/ui/field";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
+} from "@meldgrove/ui/field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@meldgrove/ui/select";
+import { Spinner } from "@meldgrove/ui/spinner";
+import { Textarea } from "@meldgrove/ui/textarea";
 import { useT } from "@/i18n";
 import { errorMessage } from "@/lib/api";
 import { usePreview } from "./api";

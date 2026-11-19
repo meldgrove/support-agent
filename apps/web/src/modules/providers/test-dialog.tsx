@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import type { Provider } from "@support-agent/shared/api/providers";
 import { CheckResultAlert } from "@/components/check-result";
 import { ModelCombobox } from "@/components/model-combobox";
-import { Button } from "@/components/ui/button";
+import { Button } from "@meldgrove/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,9 +11,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+} from "@meldgrove/ui/dialog";
+import { Field, FieldLabel } from "@meldgrove/ui/field";
+import { Spinner } from "@meldgrove/ui/spinner";
 import { useT } from "@/i18n";
 import { common } from "@/i18n/common";
 import { errorMessage } from "@/lib/api";

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@meldgrove/ui/utils";
 
 /** The header of a page: title, optional description, and actions on the right. */
 export function PageHeader(props: {

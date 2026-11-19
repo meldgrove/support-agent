@@ -13,6 +13,7 @@ import type { UpdatesResponse } from "@support-agent/shared/api/updates";
 import type { Me, User } from "@support-agent/shared/api/users";
 import { DEFAULT_APP_SETTINGS } from "@support-agent/shared/api/settings";
 import { DEFAULT_SEARCH_API_CONFIG } from "@support-agent/shared/api/knowledge";
+import { setUnauthorizedHandler } from "@/lib/api";
 import { ThemeProvider } from "@/lib/theme";
 import { createAppRouter } from "@/router";
 
@@ -299,12 +300,13 @@ describe("pages", () => {
     renderAt("/settings");
     await userEvent.click(await screen.findByRole("button", { name: "Update available · 1.0.1" }));
     expect(await screen.findByText("Fix the sign-in loop")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^Release notes/ })).toHaveAttribute(
       "href",
       "https://github.com/meldgrove/support-agent/releases/tag/v1.0.1",
     );
-    // In the popover's footer and in the settings.
-    expect(screen.getAllByText("Installed: 1.0.0 · Stable")).toHaveLength(2);
+    expect(screen.getByText("Installed: 1.0.0 · Stable")).toBeInTheDocument();
+    // The settings.
+    expect(screen.getByRole("heading", { level: 2, name: "Updates" })).toBeInTheDocument();
     expect(
       screen.getByText("Releases. Updates that need no action install automatically after 3 days."),
     ).toBeInTheDocument();
@@ -312,6 +314,48 @@ describe("pages", () => {
       screen.getByText("On: releases install automatically after 3 days, between 02:00 and 05:00 (UTC)."),
     ).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Stable/ })).toBeChecked();
+  });
+
+  it("asks who is signed in when the update routes refuse: a lost admin role hides the updates", async () => {
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const path = new URL(String(input), "http://localhost").pathname.replace(/^\/api\/v1/, "");
+      if (path === "/updates") me.role = "editor";
+      const { status, body } =
+        path === "/updates"
+          ? { status: 403, body: { error: { code: "forbidden", message: "Forbidden" } } }
+          : reply(path);
+      return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    });
+    try {
+      renderAt("/");
+      expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole("link", { name: "Providers" })).not.toBeInTheDocument());
+      expect(document.querySelector("[data-update-state]")).toBeNull();
+    } finally {
+      me.role = "admin";
+    }
+  });
+
+  it("shows the sign-in page when the update routes find the session ended", async () => {
+    const unauthorized = vi.fn();
+    setUnauthorizedHandler(unauthorized);
+    let signedOut = false;
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const path = new URL(String(input), "http://localhost").pathname.replace(/^\/api\/v1/, "");
+      if (path === "/updates") signedOut = true;
+      const { status, body } =
+        signedOut && (path === "/updates" || path === "/me")
+          ? { status: 401, body: { error: { code: "unauthorized", message: "Sign in" } } }
+          : reply(path);
+      return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    });
+    try {
+      renderAt("/settings");
+      await waitFor(() => expect(unauthorized).toHaveBeenCalled());
+      expect(await screen.findByText("Sign in again as an admin to manage updates.")).toBeInTheDocument();
+    } finally {
+      setUnauthorizedHandler(() => undefined);
+    }
   });
 
   it("shows the sign-in page with the provider name and the no-access message", async () => {

@@ -11,14 +11,14 @@ import {
   type AgentTestInput,
 } from "@support-agent/shared/api/agents";
 import { Page, PageHeader } from "@/components/layout/page";
-import { ConfirmDialog } from "@/components/confirm-dialog";
-import { ErrorState, LoadingState } from "@/components/states";
+import { ConfirmDialog } from "@meldgrove/ui/confirm-dialog";
+import { ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { EnabledBadge } from "@/components/status-badges";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@meldgrove/ui/alert";
+import { Button } from "@meldgrove/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@meldgrove/ui/card";
+import { Spinner } from "@meldgrove/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@meldgrove/ui/tabs";
 import { useLocale, useT } from "@/i18n";
 import { common } from "@/i18n/common";
 import { ApiError, errorMessage } from "@/lib/api";

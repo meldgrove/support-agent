@@ -3,7 +3,7 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { ROLES, type Role } from "@support-agent/shared/roles";
 import { userCreateSchema, type UserCreate } from "@support-agent/shared/api/users";
-import { Button } from "@/components/ui/button";
+import { Button } from "@meldgrove/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@meldgrove/ui/dialog";
 import {
   Field,
   FieldContent,
@@ -20,10 +20,10 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Spinner } from "@/components/ui/spinner";
+} from "@meldgrove/ui/field";
+import { Input } from "@meldgrove/ui/input";
+import { RadioGroup, RadioGroupItem } from "@meldgrove/ui/radio-group";
+import { Spinner } from "@meldgrove/ui/spinner";
 import { useLocale, useT } from "@/i18n";
 import { common } from "@/i18n/common";
 import { errorMessage } from "@/lib/api";

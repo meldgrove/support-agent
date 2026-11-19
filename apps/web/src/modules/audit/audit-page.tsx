@@ -1,9 +1,9 @@
 import { ScrollText } from "lucide-react";
 import { Page, PageHeader } from "@/components/layout/page";
-import { Pager } from "@/components/pager";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
-import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pager } from "@meldgrove/ui/pager";
+import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
+import { Card } from "@meldgrove/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@meldgrove/ui/table";
 import { useT } from "@/i18n";
 import { useFormatter } from "@/lib/format";
 import { useAudit } from "./api";
