@@ -1,7 +1,8 @@
 /**
  * A small reader for Slack's mrkdwn, enough to show answers as Slack shows
  * them: *bold*, _italic_, ~strike~, `code`, ```code blocks```, > quotes,
- * <url|label> links, <@U…>/<#C…|name> mentions, lists and line breaks.
+ * <url|label> links, <@U…>/<#C…|name> mentions, lists, line breaks and the
+ * emoji the bot writes.
  * The result is a tree of plain data; `SlackMessage` renders it.
  */
 
@@ -53,9 +54,11 @@ export function parseInline(line: string): Inline[] {
   let last = 0;
   const pushText = (text: string) => {
     if (!text) return;
+    // The emoji the bot writes before the cited sources; other codes stay as written.
+    const value = decodeEntities(text).replaceAll(":page_facing_up:", "📄");
     const previous = result.at(-1);
-    if (previous?.type === "text") previous.text += decodeEntities(text);
-    else result.push({ type: "text", text: decodeEntities(text) });
+    if (previous?.type === "text") previous.text += value;
+    else result.push({ type: "text", text: value });
   };
   for (const match of line.matchAll(INLINE)) {
     pushText(line.slice(last, match.index));
