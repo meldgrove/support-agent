@@ -62,23 +62,21 @@ type Consider = {
   mentioned: boolean;
   /** A reply of the poster under their headline: answered after a wait for more of the request. */
   underHeadline: boolean;
+  /** The headline itself is still being decided. */
+  headlinePending: boolean;
 };
 
-/**
- * Whether the agent should consider the message at all (before any model call).
- * `waited`: the headline wait is over, so the headline must be decided by now.
- */
+/** Whether the agent should consider the message at all (before any model call). */
 export async function shouldConsider(
   deps: Pick<HandlerDeps, "db">,
   agent: AgentRuntime,
   event: MessageEvent,
   botUserId: string | null,
-  waited = false,
 ): Promise<Consider> {
   const text = event.text ?? "";
   const mentions = mentionsOf(text);
   const mentioned = Boolean(botUserId && mentions.includes(botUserId));
-  const no = { consider: false, mentioned, underHeadline: false };
+  const no = { consider: false, mentioned, underHeadline: false, headlinePending: false };
   const isReply = Boolean(event.thread_ts && event.thread_ts !== event.ts);
   if (!isReply) return { ...no, consider: mentioned || agent.replyMode === "questions" };
   if (mentioned) return { ...no, consider: true };
@@ -105,11 +103,10 @@ export async function shouldConsider(
     return { ...no, consider: true };
   }
   // Under a headline only the poster's replies count; the triage decides on mentions there.
-  // While the headline itself is still being decided, the wait gives it time.
   const root = rows.find((row) => row.messageTs === event.thread_ts);
-  const headline = root?.outcome === "headline" || (!waited && root?.outcome === "pending");
+  const headline = root?.outcome === "headline" || root?.outcome === "pending";
   if (agent.headlineThreads && headline && root?.slackUserId === event.user) {
-    return { ...no, consider: true, underHeadline: true };
+    return { ...no, consider: true, underHeadline: true, headlinePending: root.outcome === "pending" };
   }
   return no;
 }
@@ -151,16 +148,23 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent, wait
     return;
   }
 
-  const { consider, mentioned, underHeadline } = await shouldConsider(deps, agent, event, botUserId, waited);
+  const { consider, mentioned, underHeadline, headlinePending } = await shouldConsider(
+    deps,
+    agent,
+    event,
+    botUserId,
+  );
   if (!consider) return;
-  if (underHeadline && !waited) {
+  if (underHeadline && (!waited || headlinePending)) {
     // The request may come in several messages: answer once, after the poster paused.
+    // While the headline is still being decided, wait again (up to MAX_EVENT_AGE_MS).
     const task = () => handleMessage(deps, event, true);
     if (deps.later) deps.later(HEADLINE_WAIT_MS, task);
-    else await task();
+    else if (!waited) await task();
     return;
   }
-  if (underHeadline && (await movedOn(slack, event, botUserId))) {
+  // Every reply back from the wait, also one whose thread got answered meanwhile.
+  if (waited && (await movedOn(slack, event, botUserId))) {
     logger.info(
       { channelId: event.channel },
       "skipping a reply under a headline: the poster or a colleague wrote since",
@@ -224,6 +228,8 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent, wait
       images,
       mentioned,
       imageNote,
+      inThread: Boolean(event.thread_ts && event.thread_ts !== event.ts),
+      underHeadline,
     });
     reply = replyFor(result, agent, current.settings.errorMessage);
     if (reply?.text) {

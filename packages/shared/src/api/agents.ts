@@ -204,7 +204,8 @@ export const previewResultSchema = z.object({
 });
 export type PreviewResult = z.infer<typeof previewResultSchema>;
 
-export const TEST_EXPECTATIONS = ["answer", "silent"] as const;
+/** headline: the agent takes the question for a headline and waits for the request. */
+export const TEST_EXPECTATIONS = ["answer", "silent", "headline"] as const;
 export const testExpectationSchema = z.enum(TEST_EXPECTATIONS);
 
 export const agentTestSchema = z.object({

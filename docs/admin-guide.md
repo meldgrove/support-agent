@@ -103,7 +103,8 @@ cited, and the message it would post. The console uses the form's current
 values, so you can test changes before saving them.
 
 Save good questions as **tests**: "should answer" (optionally citing a
-given URL) or "should stay silent" (thanks, chatter, requests for people).
+given URL), "should stay silent" (thanks, chatter, requests for people), or
+"should wait for the request" (headlines).
 Run them after every change to the instructions or the knowledge.
 
 ## Conversation log

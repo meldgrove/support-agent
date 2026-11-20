@@ -123,6 +123,17 @@ describe("runPipeline", () => {
     expect(await runPipeline(input({ question, agent: agent({ headlineThreads: false }) }))).toMatchObject({
       outcome: "silent",
     });
+    // A reply whose earlier messages Slack didn't return is still in a thread.
+    expect(await runPipeline(input({ question, inThread: true }))).toMatchObject({ outcome: "silent" });
+  });
+
+  it("tells the models that the replies under a headline are one request", async () => {
+    const calls = fakeModels({ Main: { triage: { respond: false, reason: "Thanks", searchQueries: [] } } });
+    await runPipeline(input({ question: "Danke!", inThread: true }));
+    await runPipeline(input({ question: "Danke!", inThread: true, underHeadline: true }));
+    const prompts = calls.map((call) => JSON.stringify(call.request.messages));
+    expect(prompts[0]).not.toContain("headline by this person");
+    expect(prompts[1]).toContain("headline by this person");
   });
 
   it("answers from the sources and keeps only the refs it found", async () => {

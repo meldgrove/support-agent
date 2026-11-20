@@ -249,9 +249,11 @@ function TestRow(props: {
       <p className="text-muted-foreground text-sm break-words">
         {test.expectation === "silent"
           ? t("expectSilent")
-          : test.expectedUrl
-            ? t("expectAnswerUrl", { url: test.expectedUrl })
-            : t("expectAnswer")}
+          : test.expectation === "headline"
+            ? t("expectHeadline")
+            : test.expectedUrl
+              ? t("expectAnswerUrl", { url: test.expectedUrl })
+              : t("expectAnswer")}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <ResultBadge test={test} />

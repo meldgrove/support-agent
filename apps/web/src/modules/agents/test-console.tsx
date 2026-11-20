@@ -31,7 +31,7 @@ export function testFromResult(question: string, result: PreviewResult): AgentTe
   const cited = result.sources.find((source) => result.citedRefs.includes(source.ref) && source.url);
   return {
     question,
-    expectation: result.outcome === "silent" ? "silent" : "answer",
+    expectation: result.outcome === "silent" || result.outcome === "headline" ? result.outcome : "answer",
     expectedUrl: result.outcome === "answered" ? (cited?.url ?? null) : null,
   };
 }

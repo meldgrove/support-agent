@@ -250,7 +250,11 @@ describe("handleMessage", () => {
       await waiting[0]!.task();
       expect(run).toHaveBeenCalledTimes(2);
       expect(run).toHaveBeenLastCalledWith(
-        expect.objectContaining({ question: "<@UCOLLEAGUE> it says the certificate expired" }),
+        expect.objectContaining({
+          question: "<@UCOLLEAGUE> it says the certificate expired",
+          inThread: true,
+          underHeadline: true,
+        }),
       );
       expect(slack.port.threadAuthors).toHaveBeenCalledWith("C0SUPPORT", root.ts);
       expect(slack.posted.at(-1)).toMatchObject({
@@ -287,30 +291,80 @@ describe("handleMessage", () => {
       expect(run).toHaveBeenCalledTimes(2);
     });
 
-    it("waits for the headline decision, and ignores replies once it was no headline", async () => {
-      const slack = fakeSlack();
+    it("waits again while the headline is being decided, then answers or drops the reply", async () => {
+      for (const decided of ["headline", "silent"] as const) {
+        await resetDatabase();
+        await getDb().insert(agents).values({ id: AGENT_ID, name: "IT support" });
+        const slack = fakeSlack();
+        let finish: (value: PipelineResult) => void = () => undefined;
+        const run = vi.fn<NonNullable<HandlerDeps["runPipeline"]>>(async () => result());
+        run.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+        const waiting: (() => Promise<void>)[] = [];
+        const deps: HandlerDeps = {
+          db: getDb(),
+          slack: slack.port,
+          config: () => botConfig(agent({ headlineThreads: true })),
+          runPipeline: run,
+          later: (_delayMs, task) => waiting.push(task),
+        };
+        const root = message({ text: "Question about the VPN" });
+        const pending = handleMessage(deps, root);
+        await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+        // The reply comes, and its wait ends, while the headline is still being decided.
+        await handleMessage(deps, message({ thread_ts: root.ts, text: "It fails" }));
+        await waiting.shift()!();
+        expect(waiting).toHaveLength(1);
+        expect(run).toHaveBeenCalledTimes(1);
+
+        finish(result({ outcome: decided, answer: null, sources: [], citedRefs: [] }));
+        await pending;
+        await waiting.shift()!();
+        expect(waiting).toHaveLength(0);
+        expect(run).toHaveBeenCalledTimes(decided === "headline" ? 2 : 1);
+      }
+    });
+
+    it("drops an older reply that waited again once a newer one was answered", async () => {
       let finish: (value: PipelineResult) => void = () => undefined;
-      const run = vi.fn<NonNullable<HandlerDeps["runPipeline"]>>(
-        () => new Promise((resolve) => (finish = resolve)),
-      );
+      const run = vi.fn<NonNullable<HandlerDeps["runPipeline"]>>(async () => result());
+      run.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+      const root = message({ text: "Question about the VPN" });
+      const older = message({ thread_ts: root.ts, text: "It fails", ts: (Number(root.ts) + 1).toFixed(6) });
+      const newer = message({
+        thread_ts: root.ts,
+        text: "Since today",
+        ts: (Number(root.ts) + 2).toFixed(6),
+      });
+      const slack = fakeSlack([
+        { ts: older.ts, userId: "UPERSON", fromBot: false },
+        { ts: newer.ts, userId: "UPERSON", fromBot: false },
+      ]);
       const waiting: (() => Promise<void>)[] = [];
       const deps: HandlerDeps = {
         db: getDb(),
         slack: slack.port,
-        config: () => botConfig(agent({ headlineThreads: true })),
+        config: () => botConfig(agent({ headlineThreads: true, followUpsInThreads: true })),
         runPipeline: run,
         later: (_delayMs, task) => waiting.push(task),
+        now: () => Number(root.ts) * 1000,
       };
-      const root = message({ text: "Question about the VPN" });
       const pending = handleMessage(deps, root);
       await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
-      // The reply comes while the headline is still being decided.
-      await handleMessage(deps, message({ thread_ts: root.ts, text: "It fails" }));
+      await handleMessage(deps, older);
+      await handleMessage(deps, newer);
+      const [olderWait, newerWait] = [waiting.shift()!, waiting.shift()!];
+      await olderWait(); // the headline is still pending: the older reply waits again
       expect(waiting).toHaveLength(1);
-      finish(result({ outcome: "silent", answer: null, sources: [], citedRefs: [] }));
+
+      finish(headline());
       await pending;
-      await waiting[0]!();
-      expect(run).toHaveBeenCalledTimes(1);
+      await newerWait();
+      expect(run).toHaveBeenCalledTimes(2);
+      await waiting.shift()!(); // now in an answered thread, but the newer reply answered for it
+      expect(run).toHaveBeenCalledTimes(2);
+      expect(
+        slack.posted.filter((post) => post.threadTs === root.ts && post.text.includes("floor 2")),
+      ).toHaveLength(1);
     });
 
     it("leaves replies alone when the agent doesn't wait for requests", async () => {

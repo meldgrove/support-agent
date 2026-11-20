@@ -277,6 +277,13 @@ export function judge(
     };
     return { passed: false, failure: failures[result.outcome] ?? "The agent posted its no-answer message" };
   }
+  if (test.expectation === "headline") {
+    if (result.outcome === "headline") return { passed: true, failure: null };
+    return {
+      passed: false,
+      failure: `The agent didn't take the message for a headline: ${result.reason ?? "no reason given"}`,
+    };
+  }
   if (result.outcome === "silent")
     return { passed: false, failure: `The agent stayed silent: ${result.reason ?? "no reason given"}` };
   if (result.outcome === "headline")

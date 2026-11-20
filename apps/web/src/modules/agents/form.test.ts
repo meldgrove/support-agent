@@ -90,11 +90,13 @@ describe("testFromResult", () => {
     });
   });
 
-  it("expects silence when the agent stayed silent", () => {
-    expect(testFromResult("Thanks!", { ...base, outcome: "silent", sources: [], citedRefs: [] })).toEqual({
-      question: "Thanks!",
-      expectation: "silent",
-      expectedUrl: null,
-    });
+  it("expects silence, or a headline, when the agent showed it", () => {
+    for (const outcome of ["silent", "headline"] as const) {
+      expect(testFromResult("Thanks!", { ...base, outcome, sources: [], citedRefs: [] })).toEqual({
+        question: "Thanks!",
+        expectation: outcome,
+        expectedUrl: null,
+      });
+    }
   });
 });
