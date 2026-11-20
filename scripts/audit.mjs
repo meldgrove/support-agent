@@ -7,14 +7,8 @@ import { execFileSync } from "node:child_process";
 const print = (line) => process.stdout.write(`${line}\n`);
 const warn = (line) => process.stderr.write(`${line}\n`);
 
-const EXCEPTIONS = [
-  {
-    id: "GHSA-fc5q-39xc-vjpf",
-    until: "2027-01-31",
-    reason:
-      "picomatch ReDoS through extglobs, with no patched release yet. The support agent never imports picomatch; vite and vitest match only the project's own glob patterns with it.",
-  },
-];
+// Each entry: { id: "GHSA-…", until: "YYYY-MM-DD", reason: "…" }.
+const EXCEPTIONS = [];
 
 const BLOCKING = new Set(["high", "critical"]);
 

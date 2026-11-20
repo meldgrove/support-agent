@@ -33,11 +33,21 @@ export function useProviderModels(id: string | null | undefined) {
   });
 }
 
-export function useCreateProvider() {
+/** Adding or deleting a provider also changes the overview's setup checklist. */
+function useInvalidateProviders() {
   const client = useQueryClient();
+  return () =>
+    Promise.all([
+      client.invalidateQueries({ queryKey: providerKeys.all }),
+      client.invalidateQueries({ queryKey: ["status"] }),
+    ]);
+}
+
+export function useCreateProvider() {
+  const invalidate = useInvalidateProviders();
   return useMutation({
     mutationFn: (input: ProviderCreate) => api.post<Provider>("/providers", input),
-    onSuccess: () => client.invalidateQueries({ queryKey: providerKeys.all }),
+    onSuccess: invalidate,
   });
 }
 
@@ -51,10 +61,10 @@ export function useUpdateProvider() {
 }
 
 export function useDeleteProvider() {
-  const client = useQueryClient();
+  const invalidate = useInvalidateProviders();
   return useMutation({
     mutationFn: (id: string) => api.delete(`/providers/${id}`),
-    onSuccess: () => client.invalidateQueries({ queryKey: providerKeys.all }),
+    onSuccess: invalidate,
   });
 }
 

@@ -63,6 +63,17 @@ describe("parseInline", () => {
   it("does not format inside code", () => {
     expect(parseInline("`*not bold*`")).toEqual([{ type: "code", text: "*not bold*" }]);
   });
+
+  it("shows the emoji the bot writes before the cited sources", () => {
+    expect(parseInline(":page_facing_up: <https://it.example.org/p|Printers>")).toEqual([
+      { type: "text", text: "📄 " },
+      { type: "link", url: "https://it.example.org/p", label: "Printers" },
+    ]);
+    expect(parseInline("`:page_facing_up:` and :custom_logo:")).toEqual([
+      { type: "code", text: ":page_facing_up:" },
+      { type: "text", text: " and :custom_logo:" },
+    ]);
+  });
 });
 
 describe("parseMrkdwn", () => {

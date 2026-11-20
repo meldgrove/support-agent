@@ -17,11 +17,21 @@ export function useKnowledgeSources() {
   });
 }
 
-export function useCreateKnowledgeSource() {
+/** Adding or deleting a source also changes the overview's setup checklist. */
+function useInvalidateKnowledgeSources() {
   const client = useQueryClient();
+  return () =>
+    Promise.all([
+      client.invalidateQueries({ queryKey: knowledgeKeys.all }),
+      client.invalidateQueries({ queryKey: ["status"] }),
+    ]);
+}
+
+export function useCreateKnowledgeSource() {
+  const invalidate = useInvalidateKnowledgeSources();
   return useMutation({
     mutationFn: (input: KnowledgeSourceCreate) => api.post<KnowledgeSource>("/knowledge-sources", input),
-    onSuccess: () => client.invalidateQueries({ queryKey: knowledgeKeys.all }),
+    onSuccess: invalidate,
   });
 }
 
@@ -35,10 +45,10 @@ export function useUpdateKnowledgeSource() {
 }
 
 export function useDeleteKnowledgeSource() {
-  const client = useQueryClient();
+  const invalidate = useInvalidateKnowledgeSources();
   return useMutation({
     mutationFn: (id: string) => api.delete(`/knowledge-sources/${id}`),
-    onSuccess: () => client.invalidateQueries({ queryKey: knowledgeKeys.all }),
+    onSuccess: invalidate,
   });
 }
 
