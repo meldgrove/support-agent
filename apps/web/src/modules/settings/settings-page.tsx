@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { appSettingsSchema, type AppSettings } from "@support-agent/shared/api/settings";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { Button } from "@meldgrove/ui/button";
 import { Card, CardContent, CardFooter } from "@meldgrove/ui/card";

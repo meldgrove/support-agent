@@ -28,8 +28,13 @@ export function useAgents() {
   });
 }
 
+export const agentQuery = (id: string) => ({
+  queryKey: agentKeys.detail(id),
+  queryFn: () => api.get<Agent>(`/agents/${id}`),
+});
+
 export function useAgent(id: string) {
-  return useQuery({ queryKey: agentKeys.detail(id), queryFn: () => api.get<Agent>(`/agents/${id}`) });
+  return useQuery(agentQuery(id));
 }
 
 /** Agents change channel assignments, provider and knowledge source usage counts, and the setup status. */

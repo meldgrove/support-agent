@@ -4,17 +4,17 @@ import { z } from "zod";
 import { Bot, LogIn } from "lucide-react";
 import { Alert, AlertDescription } from "@meldgrove/ui/alert";
 import { Button } from "@meldgrove/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@meldgrove/ui/card";
+import { SignInPage as SignInLayout } from "@meldgrove/ui/sign-in-page";
 import { Spinner } from "@meldgrove/ui/spinner";
 import { authClient } from "@/lib/auth-client";
 import { useAuthConfig } from "@/lib/auth-config";
 import { apiUrl } from "@/lib/api";
 import { defineMessages, useT } from "@/i18n";
+import { REPOSITORY_URL } from "@/lib/repository";
 import { rootRoute } from "./root";
 
 const messages = defineMessages({
   en: {
-    title: "Sign in",
     description: "Configure the support agents of your organization.",
     signInWith: "Sign in with {name}",
     signInSso: "Sign in",
@@ -22,7 +22,6 @@ const messages = defineMessages({
     failed: "Sign-in failed. Try again.",
   },
   de: {
-    title: "Anmelden",
     description: "Richte die Support-Agenten deiner Organisation ein.",
     signInWith: "Mit {name} anmelden",
     signInSso: "Anmelden",
@@ -77,37 +76,26 @@ function SignInPage() {
   };
 
   return (
-    <main className="bg-muted/40 flex min-h-svh items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <Card>
-          <CardHeader>
-            <div className="bg-primary text-primary-foreground mb-2 flex size-10 items-center justify-center rounded-lg">
-              <Bot className="size-5" />
-            </div>
-            <CardTitle className="text-xl">
-              <h1>{config?.appName ?? t("title")}</h1>
-            </CardTitle>
-            <CardDescription>{t("description")}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            {search.error ? (
-              <Alert variant="destructive">
-                <AlertDescription>{t("noAccess")}</AlertDescription>
-              </Alert>
-            ) : null}
-            {failed ? (
-              <Alert variant="destructive">
-                <AlertDescription>{t("failed")}</AlertDescription>
-              </Alert>
-            ) : null}
-            <Button type="button" onClick={() => void signIn()} disabled={pending}>
-              {pending ? <Spinner /> : <LogIn />}
-              {config ? t("signInWith", { name: config.providerName }) : t("signInSso")}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+    <SignInLayout
+      app={{ name: config?.appName || "Support Agent", icon: <Bot /> }}
+      tagline={t("description")}
+      repositoryUrl={REPOSITORY_URL}
+    >
+      {search.error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{t("noAccess")}</AlertDescription>
+        </Alert>
+      ) : null}
+      {failed ? (
+        <Alert variant="destructive">
+          <AlertDescription>{t("failed")}</AlertDescription>
+        </Alert>
+      ) : null}
+      <Button type="button" onClick={() => void signIn()} disabled={pending}>
+        {pending ? <Spinner /> : <LogIn />}
+        {config ? t("signInWith", { name: config.providerName }) : t("signInSso")}
+      </Button>
+    </SignInLayout>
   );
 }
 

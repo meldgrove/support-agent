@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { MessagesSquare } from "lucide-react";
 import { OUTCOMES, type Outcome } from "@support-agent/shared/api/agents";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { Pager } from "@meldgrove/ui/pager";
 import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { OutcomeBadge, outcomeMessages } from "@/components/status-badges";

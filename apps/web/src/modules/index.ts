@@ -8,6 +8,7 @@ import { routes as slack } from "./slack/routes";
 import { routes as users } from "./users/routes";
 import { routes as settings } from "./settings/routes";
 import { routes as audit } from "./audit/routes";
+import { routes as preferences } from "./preferences/routes";
 
 /** Routes of every module inside the signed-in app. Add new modules here. */
 export const appRoutes: AnyRoute[] = [
@@ -20,4 +21,5 @@ export const appRoutes: AnyRoute[] = [
   ...users,
   ...settings,
   ...audit,
+  ...preferences,
 ];

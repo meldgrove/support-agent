@@ -1,6 +1,6 @@
 import { useCallback, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { UpdateButton, UpdatesProvider, UpdatesSettingsCard } from "@meldgrove/ui/updates";
+import { UpdatesProvider, UpdatesSettingsCard } from "@meldgrove/ui/updates";
 import { meQuery, useIsAdmin } from "@/hooks/use-me";
 import { apiUrl } from "@/lib/api";
 
@@ -36,11 +36,6 @@ export function AdminUpdates({ appName, children }: { appName: string; children:
       {children}
     </UpdatesProvider>
   );
-}
-
-/** The update icon in the header: admins only. */
-export function AdminUpdateButton() {
-  return useIsAdmin() ? <UpdateButton /> : null;
 }
 
 /** The "Updates" section of the settings: admins only. */

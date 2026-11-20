@@ -3,7 +3,7 @@ import { Blocks, KeyRound, MoreHorizontal, Pencil, Plus, Trash2, Zap } from "luc
 import { toast } from "sonner";
 import { PROVIDER_LABELS, type Provider } from "@support-agent/shared/api/providers";
 import { ConfirmDialog } from "@meldgrove/ui/confirm-dialog";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { Badge } from "@meldgrove/ui/badge";
 import { Button } from "@meldgrove/ui/button";

@@ -10,7 +10,7 @@ import {
   type AgentTest,
   type AgentTestInput,
 } from "@support-agent/shared/api/agents";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { ConfirmDialog } from "@meldgrove/ui/confirm-dialog";
 import { ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { EnabledBadge } from "@/components/status-badges";

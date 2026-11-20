@@ -1,27 +1,17 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { UIProvider } from "@meldgrove/ui/i18n";
 import { LocaleContext } from "./index";
 import { isLocale, pickLocale, type Locale } from "./locales";
 
-/** "browser" follows the browser's languages; a locale overrides them in this browser. */
-export type LocaleChoice = Locale | "browser";
-
+/** A language chosen in this browser earlier (the user menu once offered it). */
 const STORAGE_KEY = "support-agent.locale";
 
-const LocaleChoiceContext = createContext<{
-  choice: LocaleChoice;
-  setChoice: (choice: LocaleChoice) => void;
-}>({
-  choice: "browser",
-  setChoice: () => undefined,
-});
-
-function storedChoice(): LocaleChoice {
+function storedLocale(): Locale | null {
   try {
     const value = localStorage.getItem(STORAGE_KEY);
-    return isLocale(value) ? value : "browser";
+    return isLocale(value) ? value : null;
   } catch {
-    return "browser";
+    return null;
   }
 }
 
@@ -29,30 +19,21 @@ function browserLocale(): Locale {
   return pickLocale(navigator.languages?.join(",") || navigator.language);
 }
 
-/** Provides the interface language to `useT` and the @meldgrove/ui components, and sets `<html lang>`. */
+/**
+ * Provides the interface language to `useT` and the @meldgrove/ui components
+ * (the app frame too), and sets `<html lang>`: the browser's languages, or a
+ * language stored in this browser earlier.
+ */
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [choice, setChoice] = useState<LocaleChoice>(storedChoice);
-  const locale = choice === "browser" ? browserLocale() : choice;
+  const [locale] = useState<Locale>(() => storedLocale() ?? browserLocale());
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    try {
-      if (choice === "browser") localStorage.removeItem(STORAGE_KEY);
-      else localStorage.setItem(STORAGE_KEY, choice);
-    } catch {
-      // Private mode: the choice still applies for this page.
-    }
-  }, [choice, locale]);
+  }, [locale]);
 
   return (
-    <LocaleChoiceContext.Provider value={{ choice, setChoice }}>
-      <LocaleContext.Provider value={locale}>
-        <UIProvider locale={locale}>{children}</UIProvider>
-      </LocaleContext.Provider>
-    </LocaleChoiceContext.Provider>
+    <LocaleContext.Provider value={locale}>
+      <UIProvider locale={locale}>{children}</UIProvider>
+    </LocaleContext.Provider>
   );
-}
-
-export function useLocaleChoice() {
-  return useContext(LocaleChoiceContext);
 }
