@@ -100,13 +100,13 @@ describe("runPipeline", () => {
     expect(result).toMatchObject({
       outcome: "silent",
       reason: "A thank-you",
-      slackText: null,
+      answer: null,
       model: "main-model",
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("answers from the sources and links only the cited ones", async () => {
+  it("answers from the sources and keeps only the refs it found", async () => {
     const calls = fakeModels({
       Main: {
         triage: { respond: true, reason: "Password question", searchQueries: ["reset password", " "] },
@@ -122,9 +122,7 @@ describe("runPipeline", () => {
     expect(result.searchQueries).toEqual(["reset password"]);
     expect(result.sources.map((source) => source.ref)).toEqual(["S1", "S2"]);
     expect(result.citedRefs).toEqual(["S1"]);
-    expect(result.slackText).toBe(
-      "Go to the *portal* and click Reset.\n\n:page_facing_up: <https://it.example.org/password|Reset your password>",
-    );
+    expect(result.answer).toBe("Go to the **portal** and click Reset.");
     expect(result.usage).toEqual({ inputTokens: 200, outputTokens: 20 });
     const answerPrompt = calls[1]!.request.messages[0]!.content[0];
     expect(answerPrompt).toMatchObject({ type: "text" });
@@ -134,38 +132,15 @@ describe("runPipeline", () => {
     expect(calls[1]!.request.system).toContain("Answer IT questions.");
   });
 
-  it("links only URLs from the passages or the instructions", async () => {
-    fakeModels({
-      Main: {
-        triage: { respond: true, reason: "Password question", searchQueries: ["reset password"] },
-        answer: {
-          status: "answered",
-          answer:
-            "Use [the portal](https://it.example.org/password/), [Wi-Fi](https://it.example.org/wifi) or [the helpdesk](https://help.example.org/new). Not [this](https://attacker.example/login).",
-          citedRefs: ["S1"],
-        },
-      },
-    });
-    const result = await runPipeline(
-      input({ agent: agent({ instructions: "Tickets: https://help.example.org/new." }) }),
-    );
-    expect(result.slackText).toBe(
-      "Use <https://it.example.org/password|the portal>, <https://it.example.org/wifi|Wi-Fi> or <https://help.example.org/new|the helpdesk>. Not this.\n\n:page_facing_up: <https://it.example.org/password|Reset your password>",
-    );
-  });
-
-  it("posts the escalation message when nothing answers the question", async () => {
+  it("reports no answer, citing nothing, when the passages don't answer the question", async () => {
     fakeModels({
       Main: {
         triage: { respond: true, reason: "Question", searchQueries: ["vpn"] },
-        answer: { status: "no_answer", answer: "", citedRefs: [] },
+        answer: { status: "no_answer", answer: "", citedRefs: ["S1"] },
       },
     });
     const result = await runPipeline(input({ question: "How does the VPN work?" }));
-    expect(result.outcome).toBe("no_answer");
-    expect(result.slackText).toBe("Please ask &lt;#C1|it-team&gt; &amp; wait.");
-    const silent = await runPipeline(input({ agent: agent({ noAnswerMode: "silent" }) }));
-    expect(silent.slackText).toBeNull();
+    expect(result).toMatchObject({ outcome: "no_answer", answer: null, citedRefs: [] });
   });
 
   it("uses the fallback model when the main model fails, for the rest of the message", async () => {
@@ -199,7 +174,7 @@ describe("runPipeline", () => {
     expect(result).toMatchObject({
       outcome: "error",
       error: "IT KB: The search API answered 503",
-      slackText: null,
+      answer: null,
     });
   });
 

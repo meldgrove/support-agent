@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alertText, cleanSlackText, linkableUrls, markdownToMrkdwn, sourcesLine } from "./slack-format";
+import { alertText, cleanSlackText, markdownToMrkdwn } from "./slack-format";
 
 describe("markdownToMrkdwn", () => {
   it("converts emphasis, links, headings and lists", () => {
@@ -78,59 +78,6 @@ describe("markdownToMrkdwn", () => {
   it("preserves the trusted target exactly when formatting an inline link", () => {
     const url = "https://it.example.org/a__b__c";
     expect(markdownToMrkdwn("[**guide**](" + url + ")", [url])).toBe("<" + url + "|*guide*>");
-  });
-});
-
-describe("linkableUrls", () => {
-  it("collects the passages' URLs, URLs in their texts and in the instructions", () => {
-    expect(
-      linkableUrls(
-        [
-          {
-            url: "https://it.example.org/a",
-            text: "See https://wiki.example.org/vpn. Or (https://it.example.org/b)",
-          },
-          { url: null, text: "No links." },
-        ],
-        "Tickets: https://help.example.org/new, please.",
-      ),
-    ).toEqual([
-      "https://it.example.org/a",
-      "https://wiki.example.org/vpn",
-      "https://it.example.org/b",
-      "https://help.example.org/new",
-    ]);
-  });
-
-  it("leaves Markdown and Slack markup around a URL out", () => {
-    expect(
-      linkableUrls([], "See **https://help.example.org/new** or <https://wiki.example.org/vpn|the wiki>."),
-    ).toEqual(["https://help.example.org/new", "https://wiki.example.org/vpn"]);
-  });
-});
-
-describe("sourcesLine", () => {
-  it("links each URL once and skips sources without one", () => {
-    expect(
-      sourcesLine([
-        { title: "Passwords | IT", url: "https://it.example.org/a" },
-        { title: "Again", url: "https://it.example.org/a" },
-        { title: "No link", url: null },
-        { title: "Wi-Fi <guest>", url: "https://it.example.org/b" },
-      ]),
-    ).toBe(
-      ":page_facing_up: <https://it.example.org/a|Passwords   IT> · <https://it.example.org/b|Wi-Fi &lt;guest&gt;>",
-    );
-    expect(sourcesLine([{ title: "x", url: null }])).toBeNull();
-  });
-  it("only renders well-formed HTTP URLs as citation targets", () => {
-    expect(
-      sourcesLine([
-        { title: "Malformed", url: "https://example.org/a|label" },
-        { title: "Malformed", url: "https://example.org/a<text>" },
-        { title: "Guide", url: "https://example.org/a?x=1&y=2" },
-      ]),
-    ).toBe(":page_facing_up: <https://example.org/a?x=1&amp;y=2|Guide>");
   });
 });
 

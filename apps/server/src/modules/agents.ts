@@ -30,6 +30,7 @@ import { AppError, conflict, notFound, validationError } from "../http/errors";
 import { idParam, jsonBody, requireUser } from "../http/middleware";
 import { loadAgentRuntimes, runtimeFromInput } from "../agent/runtime";
 import { runPipeline, type AgentRuntime, type PipelineResult } from "../agent/pipeline";
+import { replyFor } from "../agent/reply";
 import { channelNames } from "../slack/web";
 import { isoRequired, iso } from "./util";
 
@@ -218,8 +219,23 @@ async function preview(db: DbOrTx, id: string | null, body: unknown): Promise<Pr
     images: input.images,
     mentioned: input.mentioned,
   });
-  const slackText = result.outcome === "error" ? (await getAppSettings(db)).errorMessage : result.slackText;
-  return { ...result, slackText };
+  // Settings only matter for an error, as before; a successful preview needs no further read.
+  const errorMessage = result.outcome === "error" ? (await getAppSettings(db)).errorMessage : null;
+  const reply = replyFor(result, runtime, errorMessage);
+  return {
+    outcome: result.outcome,
+    reason: result.reason,
+    searchQueries: result.searchQueries,
+    sources: result.sources,
+    citedRefs: result.citedRefs,
+    slackText: reply?.text ?? null,
+    provider: result.provider,
+    model: result.model,
+    usedFallback: result.usedFallback,
+    error: result.error,
+    timings: result.timings,
+    usage: result.usage,
+  };
 }
 
 function toTest(row: typeof agentTests.$inferSelect): AgentTest {
@@ -243,7 +259,10 @@ const sameUrl = (a: string, b: string) => a.replace(/\/+$/, "") === b.replace(/\
 /** Whether a run meets the test's expectation, and why not. */
 export function judge(
   test: { expectation: string; expectedUrl: string | null },
-  result: Pick<PipelineResult, "outcome" | "reason" | "error" | "slackText" | "sources" | "citedRefs">,
+  result: Pick<PipelineResult, "outcome" | "reason" | "error" | "sources" | "citedRefs"> & {
+    /** What the agent would post, or null. */
+    slackText: string | null;
+  },
 ): { passed: boolean; failure: string | null } {
   if (result.outcome === "error") return { passed: false, failure: `Error: ${result.error ?? "unknown"}` };
   if (test.expectation === "silent") {
@@ -278,14 +297,16 @@ async function runTest(
     images: [],
     mentioned: false,
   });
-  const verdict = judge(row, result);
+  // Saved tests keep errors without text, unlike the test console.
+  const slackText = replyFor(result, runtime, null)?.text ?? null;
+  const verdict = judge(row, { ...result, slackText });
   const [updated] = await db
     .update(agentTests)
     .set({
       lastRunAt: new Date(),
       lastPassed: verdict.passed,
       lastOutcome: result.outcome,
-      lastAnswer: result.slackText,
+      lastAnswer: slackText,
       lastFailure: verdict.failure,
       updatedAt: new Date(),
     })

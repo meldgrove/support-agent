@@ -19,7 +19,6 @@ import {
   TRIAGE_JSON_SCHEMA,
   triageSystemPrompt,
 } from "./prompts";
-import { escapeMrkdwn, linkableUrls, markdownToMrkdwn, sourcesLine } from "./slack-format";
 
 export type ModelTarget = { connection: ProviderConnection; model: string };
 
@@ -60,8 +59,8 @@ export type PipelineResult = {
   searchQueries: string[];
   sources: RetrievedSource[];
   citedRefs: string[];
-  /** What to post in Slack (mrkdwn), or null to stay silent. Errors leave it null. */
-  slackText: string | null;
+  /** The model's answer in Markdown when the outcome is "answered"; `replyFor` renders the Slack text. */
+  answer: string | null;
   provider: string | null;
   model: string | null;
   usedFallback: boolean;
@@ -203,7 +202,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     searchQueries: [],
     sources: [],
     citedRefs: [],
-    slackText: null,
+    answer: null,
     provider: null,
     model: null,
     usedFallback: false,
@@ -263,16 +262,10 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
 
     if (answer.status === "answered" && answer.answer.trim() !== "") {
       result.outcome = "answered";
-      const cited = result.sources.filter((source) => result.citedRefs.includes(source.ref));
-      const links = sourcesLine(cited);
-      const linkable = linkableUrls(result.sources, input.agent.instructions);
-      result.slackText = [markdownToMrkdwn(answer.answer, linkable), links].filter(Boolean).join("\n\n");
+      result.answer = answer.answer;
     } else {
       result.outcome = "no_answer";
       result.citedRefs = [];
-      if (input.agent.noAnswerMode === "escalate" && input.agent.escalationMessage.trim()) {
-        result.slackText = escapeMrkdwn(input.agent.escalationMessage.trim());
-      }
     }
     return finish();
   } catch (error) {
