@@ -52,6 +52,22 @@ describe("ProviderDialog", () => {
     expect(await screen.findByText("Enter a full address, e.g. https://example.org")).toBeInTheDocument();
   });
 
+  it("hides the API key until the eye button shows it", async () => {
+    stubFetch();
+    renderWithProviders(<ProviderDialog provider={null} onClose={() => undefined} />);
+
+    const apiKey = screen.getByLabelText("API key");
+    await userEvent.type(apiKey, "sk-ant-example");
+    expect(apiKey).toHaveAttribute("type", "password");
+
+    await userEvent.click(screen.getByRole("button", { name: "Show" }));
+    expect(apiKey).toHaveAttribute("type", "text");
+    expect(apiKey).toHaveValue("sk-ant-example");
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide" }));
+    expect(apiKey).toHaveAttribute("type", "password");
+  });
+
   it("creates a provider and closes", async () => {
     const fetch = stubFetch({ status: 201, body: { ...stored, kind: "anthropic", name: "Anthropic" } });
     const onClose = vi.fn();
