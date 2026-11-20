@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { ROLES, type Role } from "@support-agent/shared/roles";
 import type { User } from "@support-agent/shared/api/users";
 import { ConfirmDialog } from "@meldgrove/ui/confirm-dialog";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { Badge } from "@meldgrove/ui/badge";
 import { Button } from "@meldgrove/ui/button";

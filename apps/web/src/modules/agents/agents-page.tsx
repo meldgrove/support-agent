@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Bot, Plus } from "lucide-react";
 import type { Agent } from "@support-agent/shared/api/agents";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { EmptyState, ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { EnabledBadge } from "@/components/status-badges";
 import { Button } from "@meldgrove/ui/button";

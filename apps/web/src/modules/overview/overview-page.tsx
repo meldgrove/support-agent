@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, CircleCheck, Circle, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { Status } from "@support-agent/shared/api/status";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { BotStateBadge } from "@/components/status-badges";
 import { Button } from "@meldgrove/ui/button";

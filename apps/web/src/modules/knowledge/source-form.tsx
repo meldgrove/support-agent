@@ -19,7 +19,7 @@ import {
 } from "@support-agent/shared/api/knowledge";
 import { CheckResultAlert } from "@/components/check-result";
 import { ConfirmDialog } from "@meldgrove/ui/confirm-dialog";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { SecretField, initialSecret, secretPayload, type SecretValue } from "@meldgrove/ui/secret-field";
 import { Alert, AlertDescription } from "@meldgrove/ui/alert";
 import { Button } from "@meldgrove/ui/button";

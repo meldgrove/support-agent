@@ -11,7 +11,7 @@ import {
 } from "@support-agent/shared/api/slack";
 import { CheckResultAlert } from "@/components/check-result";
 import { CopyButton } from "@meldgrove/ui/copy-button";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page, PageHeader } from "@meldgrove/ui/page";
 import { SecretField, initialSecret, type SecretValue } from "@meldgrove/ui/secret-field";
 import { ErrorState, LoadingState } from "@meldgrove/ui/states";
 import { Alert, AlertDescription, AlertTitle } from "@meldgrove/ui/alert";

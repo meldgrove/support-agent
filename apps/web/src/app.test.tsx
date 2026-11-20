@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Agent, AgentTest } from "@support-agent/shared/api/agents";
@@ -264,6 +264,7 @@ describe("pages", () => {
     ["/users", "Users", "Set by ADMIN_EMAILS"],
     ["/settings", "Settings", "Keep message text for (days)"],
     ["/audit", "Audit log", "No entries yet"],
+    ["/preferences", "My settings", "Keyboard shortcuts"],
   ])("%s renders", async (path, heading, text) => {
     renderAt(path);
     expect(await screen.findByRole("heading", { level: 1, name: heading })).toBeInTheDocument();
@@ -279,6 +280,75 @@ describe("pages", () => {
       "https://wiki.example.org/vpn",
     ]);
     expect(screen.getByRole("link", { name: "Open in Slack" })).toBeInTheDocument();
+  });
+
+  it("shows the navigation as text, without the main action, and where the page sits", async () => {
+    renderAt(`/agents/${AGENT_ID}`);
+    expect(await screen.findByRole("heading", { level: 1, name: "IT support" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual([
+      "Overview",
+      "Agents",
+      "Conversations",
+      "Knowledge sources",
+      "Providers",
+      "Slack",
+      "Users",
+      "Settings",
+      "Audit log",
+    ]);
+    expect(within(nav).getByRole("link", { name: "Agents" })).toHaveAttribute("aria-current", "page");
+    expect(nav.querySelector("svg")).toBeNull();
+    const crumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
+    const parent = within(crumbs).getByRole("link", { name: "Agents" });
+    expect(parent).toHaveAttribute("href", "/agents");
+    // Only the sidebar item is the current page, not the breadcrumb that leads back.
+    expect(parent).not.toHaveAttribute("aria-current");
+    expect(await within(crumbs).findByText("IT support")).toBeInTheDocument();
+  });
+
+  it("opens the person's settings from the user menu", async () => {
+    renderAt("/");
+    // @meldgrove/ui 0.1.3 names it "Account of Ada Admin"; 0.1.4 by the name and email it shows.
+    await userEvent.click(await screen.findByRole("button", { name: /Ada Admin/ }));
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Appearance",
+      "Settings",
+      "Keyboard shortcutsCtrl /",
+      "Sign out",
+    ]);
+    await userEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "My settings" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /single letters/ })).toBeChecked();
+  });
+
+  it("lets editors open their own settings", async () => {
+    me.role = "editor";
+    try {
+      renderAt("/preferences");
+      expect(await screen.findByRole("heading", { level: 1, name: "My settings" })).toBeInTheDocument();
+      expect(screen.getByText("Appearance")).toBeInTheDocument();
+    } finally {
+      me.role = "admin";
+    }
+  });
+
+  it("keeps a language stored in this browser, also for the frame", async () => {
+    localStorage.setItem("support-agent.locale", "de");
+    try {
+      renderAt("/");
+      expect(await screen.findByRole("heading", { level: 1, name: "Übersicht" })).toBeInTheDocument();
+      const nav = screen.getByRole("navigation", { name: "Hauptnavigation" });
+      expect(within(nav).getByRole("link", { name: "Unterhaltungen" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Seitenleiste ein- oder ausblenden" })).toBeInTheDocument();
+      expect(document.documentElement.lang).toBe("de");
+    } finally {
+      localStorage.removeItem("support-agent.locale");
+    }
   });
 
   it("hides admin pages from editors", async () => {

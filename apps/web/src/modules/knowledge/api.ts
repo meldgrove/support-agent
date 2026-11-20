@@ -10,11 +10,13 @@ import { api } from "@/lib/api";
 export const knowledgeKeys = { all: ["knowledge"] as const, list: ["knowledge", "list"] as const };
 
 /** Every signed-in role may read the list (the agent form picks from it). */
+export const knowledgeSourcesQuery = {
+  queryKey: knowledgeKeys.list,
+  queryFn: () => api.get<{ items: KnowledgeSource[] }>("/knowledge-sources").then((data) => data.items),
+};
+
 export function useKnowledgeSources() {
-  return useQuery({
-    queryKey: knowledgeKeys.list,
-    queryFn: () => api.get<{ items: KnowledgeSource[] }>("/knowledge-sources").then((data) => data.items),
-  });
+  return useQuery(knowledgeSourcesQuery);
 }
 
 /** Adding or deleting a source also changes the overview's setup checklist. */
