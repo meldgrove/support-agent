@@ -172,9 +172,9 @@ export function AgentSettings(props: { form: AgentForm; agent: Agent | null; del
   const { form } = props;
   const id = useId();
   const { errors } = form.formState;
-  const [providerId, fallbackProviderId, noAnswerMode] = useWatch({
+  const [providerId, fallbackProviderId, noAnswerMode, headlineThreads] = useWatch({
     control: form.control,
-    name: ["providerId", "fallbackProviderId", "noAnswerMode"],
+    name: ["providerId", "fallbackProviderId", "noAnswerMode", "headlineThreads"],
   });
   const knownNames = Object.fromEntries(
     (props.agent?.channels ?? []).map((channel) => [channel.id, channel.name]),
@@ -406,6 +406,33 @@ export function AgentSettings(props: { form: AgentForm; agent: Agent | null; del
               {...form.register("escalationMessage")}
             />
             <FieldError errors={[errors.escalationMessage]} />
+          </Field>
+        ) : null}
+        <Controller
+          control={form.control}
+          name="headlineThreads"
+          render={({ field }) => (
+            <Field orientation="horizontal">
+              <Switch id={`${id}-headlines`} checked={field.value} onCheckedChange={field.onChange} />
+              <FieldContent>
+                <FieldLabel htmlFor={`${id}-headlines`}>{t("headlines")}</FieldLabel>
+                <FieldDescription>{t("headlinesHint")}</FieldDescription>
+              </FieldContent>
+            </Field>
+          )}
+        />
+        {headlineThreads ? (
+          <Field data-invalid={errors.headlineMessage ? true : undefined}>
+            <FieldLabel htmlFor={`${id}-headline-message`}>{t("headlineMessage")}</FieldLabel>
+            <Textarea
+              id={`${id}-headline-message`}
+              rows={3}
+              maxLength={1000}
+              aria-invalid={errors.headlineMessage ? true : undefined}
+              {...form.register("headlineMessage")}
+            />
+            <FieldDescription>{t("headlineMessageHint")}</FieldDescription>
+            <FieldError errors={[errors.headlineMessage]} />
           </Field>
         ) : null}
         <Controller

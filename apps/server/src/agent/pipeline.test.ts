@@ -47,6 +47,8 @@ function agent(overrides: Partial<AgentRuntime> = {}): AgentRuntime {
     followUpsInThreads: false,
     noAnswerMode: "escalate",
     escalationMessage: "Please ask <#C1|it-team> & wait.",
+    headlineThreads: true,
+    headlineMessage: "Please write the whole request in one message.",
     displayName: null,
     iconUrl: null,
     readImages: true,
@@ -104,6 +106,23 @@ describe("runPipeline", () => {
       model: "main-model",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("takes a top-level message for a headline only when triage says so and the agent waits for requests", async () => {
+    const triage = { respond: false, headline: true, reason: "Only a topic", searchQueries: [] };
+    fakeModels({ Main: { triage } });
+    const question = "Question about the VPN";
+    expect(await runPipeline(input({ question }))).toMatchObject({
+      outcome: "headline",
+      reason: "Only a topic",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      await runPipeline(input({ question, thread: [{ role: "person", text: "Question about the VPN" }] })),
+    ).toMatchObject({ outcome: "silent" });
+    expect(await runPipeline(input({ question, agent: agent({ headlineThreads: false }) }))).toMatchObject({
+      outcome: "silent",
+    });
   });
 
   it("answers from the sources and keeps only the refs it found", async () => {

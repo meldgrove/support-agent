@@ -15,6 +15,7 @@ const agent = {
   instructions: "Answer IT questions.",
   noAnswerMode: "escalate" as const,
   escalationMessage: "Please ask the IT team.",
+  headlineMessage: "Please write the whole request in one message.",
 };
 
 const answered = (answer: string, sources: RetrievedSource[], citedRefs: string[]) => ({
@@ -97,6 +98,17 @@ describe("replyFor", () => {
       autoLinkUrls: true,
     });
     expect(replyFor({ outcome: "error", ...nothing }, agent, null)).toBeNull();
+  });
+
+  it("posts the headline message escaped, with auto-linking, and nothing without one", () => {
+    const headline = { ...agent, headlineMessage: "  One message, please <#C1|it-team> & thanks.  " };
+    expect(replyFor({ outcome: "headline", ...nothing }, headline, "Error")).toEqual({
+      text: "One message, please &lt;#C1|it-team&gt; &amp; thanks.",
+      autoLinkUrls: true,
+    });
+    expect(
+      replyFor({ outcome: "headline", ...nothing }, { ...agent, headlineMessage: " " }, "Error"),
+    ).toBeNull();
   });
 
   it("posts nothing when the agent stays silent", () => {

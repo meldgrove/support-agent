@@ -47,6 +47,13 @@ export const agentSchema = z.object({
   noAnswerMode: noAnswerModeSchema,
   /** Posted when no answer is found (noAnswerMode = escalate), e.g. "Please ask @it-team." */
   escalationMessage: z.string(),
+  /**
+   * When a top-level message only names a topic ("Question about the VPN"),
+   * wait for the request in its thread: answer the poster's replies there.
+   */
+  headlineThreads: z.boolean(),
+  /** Posted under such a headline (headlineThreads), e.g. to ask for whole requests; empty posts nothing. */
+  headlineMessage: z.string(),
   /** Name and icon in Slack; null uses the Slack app's own. Needs the chat:write.customize scope. */
   displayName: z.string().nullable(),
   iconUrl: z.string().nullable(),
@@ -76,6 +83,8 @@ export const agentInputSchema = z
     followUpsInThreads: z.boolean(),
     noAnswerMode: noAnswerModeSchema,
     escalationMessage: z.string().trim().max(1000),
+    headlineThreads: z.boolean(),
+    headlineMessage: z.string().trim().max(1000),
     displayName: nullableText(80),
     iconUrl: z.preprocess(
       (value) => (typeof value === "string" && value.trim() === "" ? null : value),
@@ -127,11 +136,15 @@ Keep answers short: a few sentences or steps.`;
 export const DEFAULT_ESCALATION_MESSAGE =
   "I couldn't find an answer to this. Someone from the team will get back to you.";
 
+export const DEFAULT_HEADLINE_MESSAGE =
+  "Please write your whole request in one message next time, so I can help right away. For now, I'll read your reply in this thread.";
+
 // ---------------------------------------------------------------------------
 // Test console and saved tests
 // ---------------------------------------------------------------------------
 
-export const OUTCOMES = ["pending", "answered", "silent", "no_answer", "error"] as const;
+/** headline: the message only named a topic; the agent waits for the request in its thread. */
+export const OUTCOMES = ["pending", "answered", "silent", "headline", "no_answer", "error"] as const;
 export const outcomeSchema = z.enum(OUTCOMES);
 export type Outcome = z.infer<typeof outcomeSchema>;
 

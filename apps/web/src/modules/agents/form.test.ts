@@ -1,16 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ESCALATION_MESSAGE, DEFAULT_INSTRUCTIONS } from "@support-agent/shared/api/agents";
+import {
+  DEFAULT_ESCALATION_MESSAGE,
+  DEFAULT_HEADLINE_MESSAGE,
+  DEFAULT_INSTRUCTIONS,
+} from "@support-agent/shared/api/agents";
 import { draftFromValues, toFormValues } from "./form";
 import { testFromResult } from "./test-console";
 
 const PROVIDER = "0f8e7d6c-5b4a-4c3d-8e2f-1a0b9c8d7e6f";
 
 describe("agent form", () => {
-  it("starts a new agent off, with the default instructions and escalation message", () => {
+  it("starts a new agent off, with the default instructions, escalation and headline message", () => {
     const values = toFormValues(null);
     expect(values.enabled).toBe(false);
     expect(values.instructions).toBe(DEFAULT_INSTRUCTIONS);
     expect(values.escalationMessage).toBe(DEFAULT_ESCALATION_MESSAGE);
+    expect(values.headlineThreads).toBe(true);
+    expect(values.headlineMessage).toBe(DEFAULT_HEADLINE_MESSAGE);
   });
 
   it("turns the form into a draft with blanks as null", () => {

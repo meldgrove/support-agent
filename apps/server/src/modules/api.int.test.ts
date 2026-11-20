@@ -42,6 +42,8 @@ function agentInput(overrides: Partial<AgentInput> = {}): AgentInput {
     followUpsInThreads: false,
     noAnswerMode: "escalate",
     escalationMessage: "Ask the IT team.",
+    headlineThreads: false,
+    headlineMessage: "",
     displayName: null,
     iconUrl: null,
     readImages: true,

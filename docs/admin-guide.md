@@ -79,6 +79,16 @@ On the **Agents** page:
   too, unless they mention someone else.
 - **When nothing answers the question:** post the escalation message (for
   example "I couldn't find this. Please ask @it-team.") or stay silent.
+- **Wait for the request after a headline:** when a message only names a
+  topic ("Question about the VPN") and the request follows in its thread,
+  the agent answers the poster's replies there. It waits 30 seconds after
+  each reply, so a request in several messages gets one answer, and stays
+  out once a colleague replies in the thread. Under the headline it can post
+  a message, for example a request to write the whole request in one message
+  next time. Replies still waiting are lost when the bot restarts.
+- **Messages addressed to colleagues:** the agent stays silent on them,
+  unless the instructions say otherwise (for example "In this channel, a
+  mention of IT staff is a normal request.").
 - **Name and icon in Slack**, and whether the agent reads attached images.
 
 A new agent starts disabled. Enable it once the test console answers well.
@@ -98,7 +108,7 @@ Run them after every change to the instructions or the knowledge.
 ## Conversation log
 
 **Conversations** lists every message an agent considered: the outcome
-(answered, silent, no answer, error), the reason, the cited sources, model,
+(answered, silent, waits for the request, no answer, error), the reason, the cited sources, model,
 time and tokens, 👍/👎 feedback from Slack, and a link to the message.
 Messages the agent never considered (in "mentions" mode, or replies between
 people) are not recorded.

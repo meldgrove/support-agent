@@ -32,6 +32,8 @@ export type AgentRuntime = {
   followUpsInThreads: boolean;
   noAnswerMode: NoAnswerMode;
   escalationMessage: string;
+  headlineThreads: boolean;
+  headlineMessage: string;
   displayName: string | null;
   iconUrl: string | null;
   readImages: boolean;
@@ -71,6 +73,8 @@ export type PipelineResult = {
 
 const triageSchema = z.object({
   respond: z.boolean(),
+  // Providers without strict structured output may leave it out.
+  headline: z.boolean().default(false),
   reason: z.string(),
   searchQueries: z.array(z.string()),
 });
@@ -233,7 +237,9 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     result.timings.triageMs = Math.round(performance.now() - stepStarted);
     result.reason = triage.reason.trim().slice(0, 500) || null;
     if (!triage.respond) {
-      result.outcome = "silent";
+      // Only a top-level message can be a headline: its thread is where the request follows.
+      const headline = triage.headline && input.agent.headlineThreads && input.thread.length === 0;
+      result.outcome = headline ? "headline" : "silent";
       return finish();
     }
 

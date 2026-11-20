@@ -6,8 +6,14 @@ import { agents, exchanges } from "../db/schema";
 import { resetDatabase } from "../test/helpers";
 import type { AgentRuntime, PipelineResult } from "../agent/pipeline";
 import type { BotConfig } from "./config-store";
-import { handleMessage, handleReaction, type MessageEvent } from "./handler";
-import type { SlackPort } from "./slack-port";
+import {
+  HEADLINE_WAIT_MS,
+  handleMessage,
+  handleReaction,
+  type HandlerDeps,
+  type MessageEvent,
+} from "./handler";
+import type { SlackPort, ThreadAuthor } from "./slack-port";
 import { runMaintenance } from "./maintenance";
 import { putSetting } from "../core/settings";
 
@@ -24,6 +30,8 @@ function agent(overrides: Partial<AgentRuntime> = {}): AgentRuntime {
     followUpsInThreads: false,
     noAnswerMode: "escalate",
     escalationMessage: "Ask the IT team.",
+    headlineThreads: false,
+    headlineMessage: "One message, please.",
     displayName: "IT Helper",
     iconUrl: null,
     readImages: true,
@@ -77,7 +85,7 @@ function result(overrides: Partial<PipelineResult> = {}): PipelineResult {
   };
 }
 
-function fakeSlack() {
+function fakeSlack(authors: ThreadAuthor[] = []) {
   const posted: Parameters<SlackPort["postMessage"]>[0][] = [];
   const reactions: string[] = [];
   const port: SlackPort = {
@@ -92,6 +100,7 @@ function fakeSlack() {
       reactions.push(`-${name}@${ts}`);
     }),
     threadHistory: vi.fn(async () => [{ role: "person" as const, text: "earlier" }]),
+    threadAuthors: vi.fn(async () => authors),
     downloadImage: vi.fn(async () => null),
   };
   return { port, posted, reactions };
@@ -202,6 +211,117 @@ describe("handleMessage", () => {
       expect.objectContaining({ thread: [{ role: "person", text: "earlier" }] }),
     );
     expect(slack.posted.at(-1)?.threadTs).toBe(root.ts);
+  });
+
+  describe("under a headline", () => {
+    const headline = () => result({ outcome: "headline", answer: null, sources: [], citedRefs: [] });
+
+    /** Posts a headline; the deps collect delayed tasks for the test to run. */
+    async function afterHeadline(slack: ReturnType<typeof fakeSlack>, run: HandlerDeps["runPipeline"]) {
+      const waiting: { delayMs: number; task: () => Promise<void> }[] = [];
+      const deps: HandlerDeps = {
+        db: getDb(),
+        slack: slack.port,
+        config: () => botConfig(agent({ headlineThreads: true })),
+        runPipeline: run,
+        later: (delayMs, task) => waiting.push({ delayMs, task }),
+      };
+      const root = message({ text: "Question about the VPN" });
+      await handleMessage(deps, root);
+      return { deps, root, waiting };
+    }
+
+    it("posts the headline message, then answers the poster's reply after the wait", async () => {
+      const slack = fakeSlack();
+      const run = vi.fn<NonNullable<HandlerDeps["runPipeline"]>>(async () => headline());
+      const { deps, root, waiting } = await afterHeadline(slack, run);
+      expect(slack.posted).toEqual([
+        expect.objectContaining({ threadTs: root.ts, text: "One message, please." }),
+      ]);
+      const [headlineRow] = await getDb().select().from(exchanges);
+      expect(headlineRow).toMatchObject({ outcome: "headline", messageTs: root.ts });
+
+      run.mockResolvedValueOnce(result());
+      const reply = message({ thread_ts: root.ts, text: "<@UCOLLEAGUE> it says the certificate expired" });
+      await handleMessage(deps, reply);
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(waiting).toEqual([{ delayMs: HEADLINE_WAIT_MS, task: expect.any(Function) }]);
+
+      await waiting[0]!.task();
+      expect(run).toHaveBeenCalledTimes(2);
+      expect(run).toHaveBeenLastCalledWith(
+        expect.objectContaining({ question: "<@UCOLLEAGUE> it says the certificate expired" }),
+      );
+      expect(slack.port.threadAuthors).toHaveBeenCalledWith("C0SUPPORT", root.ts);
+      expect(slack.posted.at(-1)).toMatchObject({
+        threadTs: root.ts,
+        text: expect.stringContaining("floor 2"),
+      });
+    });
+
+    it("ignores other people's replies, and skips a reply when more followed or a colleague replied", async () => {
+      const run = vi.fn<NonNullable<HandlerDeps["runPipeline"]>>(async () => headline());
+      const first = fakeSlack();
+      const { deps, root, waiting } = await afterHeadline(first, run);
+
+      await handleMessage(deps, message({ thread_ts: root.ts, user: "UOTHER", text: "Same here" }));
+      expect(waiting).toHaveLength(0);
+
+      const reply = message({ thread_ts: root.ts, text: "It fails" });
+      const later = { ts: (Number(reply.ts) + 1).toFixed(6), userId: "UPERSON", fromBot: false };
+      const colleague = { ts: reply.ts, userId: "UCOLLEAGUE", fromBot: false };
+      for (const authors of [[later], [colleague]]) {
+        const slack = fakeSlack(authors);
+        await handleMessage({ ...deps, slack: slack.port }, reply);
+        await waiting.pop()!.task();
+        expect(run).toHaveBeenCalledTimes(1);
+        expect(slack.posted).toHaveLength(0);
+      }
+      // Other bots and the agent itself don't count as a colleague.
+      const slack = fakeSlack([
+        { ts: reply.ts, userId: BOT, fromBot: true },
+        { ts: reply.ts, userId: "UOTHERBOT", fromBot: true },
+      ]);
+      await handleMessage({ ...deps, slack: slack.port }, reply);
+      await waiting.pop()!.task();
+      expect(run).toHaveBeenCalledTimes(2);
+    });
+
+    it("waits for the headline decision, and ignores replies once it was no headline", async () => {
+      const slack = fakeSlack();
+      let finish: (value: PipelineResult) => void = () => undefined;
+      const run = vi.fn<NonNullable<HandlerDeps["runPipeline"]>>(
+        () => new Promise((resolve) => (finish = resolve)),
+      );
+      const waiting: (() => Promise<void>)[] = [];
+      const deps: HandlerDeps = {
+        db: getDb(),
+        slack: slack.port,
+        config: () => botConfig(agent({ headlineThreads: true })),
+        runPipeline: run,
+        later: (_delayMs, task) => waiting.push(task),
+      };
+      const root = message({ text: "Question about the VPN" });
+      const pending = handleMessage(deps, root);
+      await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+      // The reply comes while the headline is still being decided.
+      await handleMessage(deps, message({ thread_ts: root.ts, text: "It fails" }));
+      expect(waiting).toHaveLength(1);
+      finish(result({ outcome: "silent", answer: null, sources: [], citedRefs: [] }));
+      await pending;
+      await waiting[0]!();
+      expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves replies alone when the agent doesn't wait for requests", async () => {
+      const slack = fakeSlack();
+      const run = vi.fn<NonNullable<HandlerDeps["runPipeline"]>>(async () => headline());
+      const { deps, root, waiting } = await afterHeadline(slack, run);
+      const off = { ...deps, config: () => botConfig(agent({ headlineThreads: false })) };
+      await handleMessage(off, message({ thread_ts: root.ts, text: "It fails" }));
+      expect(waiting).toHaveLength(0);
+      expect(run).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("posts the error message, alerts, and records the error", async () => {

@@ -46,6 +46,8 @@ export class Bot {
   private readonly queue: (() => Promise<void>)[] = [];
   private readonly alerts = new Map<string, number>();
   private timers: NodeJS.Timeout[] = [];
+  /** Delayed message handling (the headline wait); lost on a restart. */
+  private readonly delayed = new Set<NodeJS.Timeout>();
   private stopping = false;
 
   async start() {
@@ -178,6 +180,7 @@ export class Bot {
       slack: port,
       config: () => this.store.current,
       alert: (agent: AgentRuntime, channel: string, message: string) => this.alert(agent, channel, message),
+      later: (delayMs: number, task: () => Promise<void>) => this.later(delayMs, task),
     };
     if (kind === "reaction") {
       void handleReaction(deps, envelope.event as ReactionEvent).catch((error: unknown) =>
@@ -188,6 +191,15 @@ export class Bot {
     const event = envelope.event as MessageEvent;
     if (!this.store.current.agentsByChannel.has(event.channel)) return;
     this.enqueue(() => handleMessage(deps, event));
+  }
+
+  private later(delayMs: number, task: () => Promise<void>) {
+    if (this.stopping) return;
+    const timer = setTimeout(() => {
+      this.delayed.delete(timer);
+      this.enqueue(task);
+    }, delayMs);
+    this.delayed.add(timer);
   }
 
   private enqueue(task: () => Promise<void>) {
@@ -281,6 +293,8 @@ export class Bot {
   async stop() {
     this.stopping = true;
     for (const timer of this.timers) clearInterval(timer);
+    for (const timer of this.delayed) clearTimeout(timer);
+    this.delayed.clear();
     await this.store.stop();
     const socket = this.socket;
     this.socket = null;
