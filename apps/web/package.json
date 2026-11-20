@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "7.0.5",
-    "@meldgrove/ui": "^0.1.5",
+    "@meldgrove/ui": "^0.1.6",
     "@sentry/browser": "11.11.0",
     "@support-agent/shared": "*",
     "@tanstack/react-query": "5.107.1",
