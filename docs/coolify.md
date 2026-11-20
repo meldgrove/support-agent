@@ -43,6 +43,13 @@ button, backups, logs and hardening are the same as on a server: see
    environment variables to the new series and redeploy. Coolify reads
    `compose.coolify.yaml` from `stable`, which is at the newest release.
 
+## Backups
+
+For [Meldgrove Backups](deployment.md#backups), set `BACKUP_URL` and
+`BACKUP_TOKEN` (from the app's source in Backups) in the resource's
+environment variables and redeploy. Each deploy pulls the backup agent's
+image.
+
 ## Automatic updates
 
 The image tag set in `SUPPORT_AGENT_VERSION` decides what installs: a series
