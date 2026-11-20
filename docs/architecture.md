@@ -59,11 +59,11 @@ status are tables.
    passages or the instructions; others keep just their text. Without an
    answer, the agent posts its escalation message or stays silent; on
    errors it posts the error message from the settings and alerts the alert
-   channel.
+   channel. `agent/reply.ts` renders every reply.
 8. **Update the exchange** with outcome, sources, model, tokens and timing.
 
 The test console and saved tests run steps 4 to 7 through the same code
-(`runPipeline`), without Slack.
+(`runPipeline`, then `replyFor`), without Slack.
 
 ## Models
 

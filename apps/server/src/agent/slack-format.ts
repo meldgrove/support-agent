@@ -6,22 +6,6 @@ export function escapeMrkdwn(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** URLs in a text, without trailing punctuation or markup (`**url**`, `<url|label>`). */
-function urlsIn(text: string): string[] {
-  return [...text.matchAll(/https?:\/\/[^\s<>"'`()[\]|]+/gi)].map((match) =>
-    match[0].replace(/[.,;:!?*_~]+$/, ""),
-  );
-}
-
-/** The URLs an answer may link to: the passages' own, and those in their texts and in the instructions. */
-export function linkableUrls(
-  sources: { url: string | null; text: string }[],
-  instructions: string,
-): string[] {
-  const urls = sources.flatMap((source) => [...(source.url ? [source.url] : []), ...urlsIn(source.text)]);
-  return [...urls, ...urlsIn(instructions)];
-}
-
 /** Undo one layer of Slack or HTML escaping. */
 function unescapeHtml(text: string): string {
   return text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
@@ -38,7 +22,7 @@ function linkKey(url: string): string {
 }
 
 /** Keep Slack markup delimiters and credentials out of link targets. */
-function isSlackLink(url: string): boolean {
+export function isSlackLink(url: string): boolean {
   if (!/^https?:\/\//i.test(url) || /[<>|\s\p{Cc}]/u.test(url)) return false;
   const parsed = URL.parse(url);
   return Boolean(parsed && !parsed.username && !parsed.password);
@@ -65,7 +49,7 @@ function convertInline(text: string, findLink: (url: string) => string | null | 
   return result.replace(/\uE000(\d+)\uE000/g, (_token, index: string) => targets[Number(index)]!);
 }
 
-/** Slack mrkdwn from the model's Markdown; links only to `linkable` URLs (see `linkableUrls`). */
+/** Slack mrkdwn from the model's Markdown; links only to `linkable` URLs. */
 export function markdownToMrkdwn(markdown: string, linkable: Iterable<string>): string {
   const allowed = new Set<string>();
   const fallbackTargets = new Map<string, string | null>();
@@ -120,19 +104,6 @@ export function markdownToMrkdwn(markdown: string, linkable: Iterable<string>): 
 /** The alert channel's message about an agent that could not answer; name and error stay plain text. */
 export function alertText(agentName: string, channelId: string, error: string): string {
   return `:warning: *${escapeMrkdwn(agentName)}* could not answer in <#${channelId}>: ${escapeMrkdwn(error)}`;
-}
-
-/** One line with links to the cited sources, e.g. ":page_facing_up: <url|Title> · <url|Title>". */
-export function sourcesLine(sources: { title: string; url: string | null }[]): string | null {
-  const seen = new Set<string>();
-  const links: string[] = [];
-  for (const source of sources) {
-    if (!source.url || !isSlackLink(source.url) || seen.has(source.url)) continue;
-    seen.add(source.url);
-    const label = escapeMrkdwn(source.title.replace(/[|\n]/g, " ").trim() || source.url);
-    links.push(`<${escapeMrkdwn(source.url)}|${label}>`);
-  }
-  return links.length > 0 ? `:page_facing_up: ${links.join(" · ")}` : null;
 }
 
 /** Removes the bot's mention and Slack's markup of mentions and links from a question. */

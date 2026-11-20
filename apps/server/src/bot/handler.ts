@@ -9,6 +9,7 @@ import {
   type PipelineResult,
   type ThreadMessage,
 } from "../agent/pipeline";
+import { replyFor, type Reply } from "../agent/reply";
 import type { ImageInput } from "../llm";
 import { logger } from "../logger";
 import type { BotConfig } from "./config-store";
@@ -125,6 +126,7 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Pro
   const reaction = current.settings.workingReaction;
   let reacted = false;
   let result: PipelineResult | null = null;
+  let reply: Reply | null = null;
   let answerTs: string | null = null;
   let postError: string | null = null;
   try {
@@ -158,14 +160,12 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Pro
       mentioned,
       imageNote,
     });
-    const text = result.outcome === "error" ? current.settings.errorMessage : result.slackText;
-    if (text) {
+    reply = replyFor(result, agent, current.settings.errorMessage);
+    if (reply?.text) {
       answerTs = await slack.postMessage({
         channel: event.channel,
         threadTs,
-        text,
-        // Only these outcomes use configured text rather than a model answer.
-        ...(result.outcome === "error" || result.outcome === "no_answer" ? { autoLinkUrls: true } : {}),
+        ...reply,
         username: agent.displayName,
         iconUrl: agent.iconUrl,
       });
@@ -184,12 +184,14 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Pro
 
   const outcome = postError ? "error" : (result?.outcome ?? "error");
   const cited = result ? result.sources.filter((source) => result!.citedRefs.includes(source.ref)) : [];
+  // The error message is a reply, not an answer: errors keep no answer text.
+  const answer = keepText && result?.outcome !== "error" ? (reply?.text ?? null) : null;
   await deps.db
     .update(exchanges)
     .set({
       outcome,
       // Maintenance may have cleared this exchange while the model was running.
-      answer: sql`case when ${exchanges.textRemovedAt} is null then ${keepText ? (result?.slackText ?? null) : null} end`,
+      answer: sql`case when ${exchanges.textRemovedAt} is null then ${answer} end`,
       reason: sql`case when ${exchanges.textRemovedAt} is null then ${keepText ? (result?.reason ?? null) : null} end`,
       searchQueries: sql`case when ${exchanges.textRemovedAt} is null
         then ${JSON.stringify(keepText ? (result?.searchQueries ?? []) : [])}::jsonb else '[]'::jsonb end`,

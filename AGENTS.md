@@ -36,7 +36,7 @@ apps/server/src/
   core/            crypto (secrets), settings, audit, config-change NOTIFY
   llm/             LlmClient, Anthropic and OpenAI-compatible adapters, generateJson
   knowledge/       search API connector (templates, auth, response mapping)
-  agent/           pipeline (triage → search → answer), prompts, Slack formatting, runtime loading
+  agent/           pipeline (triage → search → answer), reply, prompts, Slack formatting, runtime loading
   bot/             Socket Mode process, message handler, Slack port, config store, maintenance
   slack/           Web API helpers, app manifest
   updater/         client of the Meldgrove Updater's API (update button, modules/updates.ts)
@@ -61,7 +61,7 @@ packages/shared/src/api/  request and response schemas
   good configuration; time-limit every outside call.
 - **Answers are grounded:** the answer step gets only the found passages and
   the instructions; the posted links come from the cited passages, never from
-  model text. Keep it that way.
+  model text (`agent/reply.ts` renders every reply). Keep it that way.
 - **UI components** come from `@meldgrove/ui` (`@meldgrove/ui/<name>`, `cn`
   from `@meldgrove/ui/utils`); the app keeps no copies. A missing component or
   a fix goes into that package.

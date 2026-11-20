@@ -66,7 +66,7 @@ function result(overrides: Partial<PipelineResult> = {}): PipelineResult {
       },
     ],
     citedRefs: ["S1"],
-    slackText: "Use the printer on floor 2.",
+    answer: "Use the printer on floor 2.",
     provider: "Main",
     model: "m",
     usedFallback: false,
@@ -125,7 +125,8 @@ describe("handleMessage", () => {
       {
         channel: "C0SUPPORT",
         threadTs: event.ts,
-        text: "Use the printer on floor 2.",
+        text: "Use the printer on floor 2.\n\n:page_facing_up: <https://it.example.org/p|Printers>",
+        autoLinkUrls: false,
         username: "IT Helper",
         iconUrl: null,
       },
@@ -136,7 +137,7 @@ describe("handleMessage", () => {
       agentId: AGENT_ID,
       outcome: "answered",
       question: "Which printer can I use?",
-      answer: "Use the printer on floor 2.",
+      answer: "Use the printer on floor 2.\n\n:page_facing_up: <https://it.example.org/p|Printers>",
       sources: [{ title: "Printers", url: "https://it.example.org/p" }],
       answerTs: "170000001.000100",
       inputTokens: 50,
@@ -207,7 +208,7 @@ describe("handleMessage", () => {
     const slack = fakeSlack();
     const alert = vi.fn();
     const run = vi.fn(async () =>
-      result({ outcome: "error", error: "The API key was rejected", slackText: null }),
+      result({ outcome: "error", error: "The API key was rejected", answer: null }),
     );
     await handleMessage(
       { db: getDb(), slack: slack.port, config: () => botConfig(agent()), runPipeline: run, alert },
@@ -223,12 +224,12 @@ describe("handleMessage", () => {
       "The API key was rejected",
     );
     const [row] = await getDb().select().from(exchanges);
-    expect(row).toMatchObject({ outcome: "error", error: "The API key was rejected" });
+    expect(row).toMatchObject({ outcome: "error", error: "The API key was rejected", answer: null });
   });
 
   it("stays silent without posting, and keeps no text when retention is 0", async () => {
     const slack = fakeSlack();
-    const run = vi.fn(async () => result({ outcome: "silent", slackText: null, sources: [], citedRefs: [] }));
+    const run = vi.fn(async () => result({ outcome: "silent", answer: null, sources: [], citedRefs: [] }));
     const settings = { ...DEFAULT_APP_SETTINGS, retentionDays: 0, workingReaction: null };
     await handleMessage(
       { db: getDb(), slack: slack.port, config: () => botConfig(agent(), settings), runPipeline: run },
