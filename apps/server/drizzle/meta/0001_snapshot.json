@@ -1,5 +1,5 @@
 {
-  "id": "50965631-ab23-4aed-a9b6-eb83447d08f1",
+  "id": "89d1def3-3f82-4919-bab5-e3a6c0f0ba50",
   "prevId": "6dd0e8ec-2849-4023-87a8-bf93c9f17a58",
   "version": "7",
   "dialect": "postgresql",
@@ -789,7 +789,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "''"
+          "default": "'Please write your whole request in one message next time, so I can help right away. For now, I''ll read your reply in this thread.'"
         },
         "display_name": {
           "name": "display_name",

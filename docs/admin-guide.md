@@ -83,9 +83,10 @@ On the **Agents** page:
   topic ("Question about the VPN") and the request follows in its thread,
   the agent answers the poster's replies there. It waits 30 seconds after
   each reply, so a request in several messages gets one answer, and stays
-  out once a colleague replies in the thread. Under the headline it can post
-  a message, for example a request to write the whole request in one message
-  next time. Replies still waiting are lost when the bot restarts.
+  out once a colleague replies in the thread. Under the headline it posts a
+  message; the default asks to write the whole request in one message next
+  time. Change it, or empty it to post nothing. Replies still waiting are
+  lost when the bot restarts.
 - **Messages addressed to colleagues:** the agent stays silent on them,
   unless the instructions say otherwise (for example "In this channel, a
   mention of IT staff is a normal request.").
