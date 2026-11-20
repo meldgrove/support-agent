@@ -32,6 +32,8 @@ export type AgentRuntime = {
   followUpsInThreads: boolean;
   noAnswerMode: NoAnswerMode;
   escalationMessage: string;
+  headlineThreads: boolean;
+  headlineMessage: string;
   displayName: string | null;
   iconUrl: string | null;
   readImages: boolean;
@@ -51,7 +53,14 @@ export type PipelineInput = {
   mentioned: boolean;
   /** E.g. that an attached image could not be read. */
   imageNote?: string | null;
+  /** A thread reply, even when its earlier messages are unknown: never a headline. */
+  inThread?: boolean;
+  /** The poster's reply under their headline: their replies there are one request. */
+  underHeadline?: boolean;
 };
+
+const UNDER_HEADLINE_NOTE =
+  "The thread starts with a headline by this person. Their replies in the thread and the latest message together are their request: decide on and answer them as a whole.";
 
 export type PipelineResult = {
   outcome: Exclude<Outcome, "pending">;
@@ -71,6 +80,8 @@ export type PipelineResult = {
 
 const triageSchema = z.object({
   respond: z.boolean(),
+  // Providers without strict structured output may leave it out.
+  headline: z.boolean().default(false),
   reason: z.string(),
   searchQueries: z.array(z.string()),
 });
@@ -195,7 +206,8 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
   const imageNote =
     input.imageNote ??
     (!input.agent.readImages && input.images.length > 0 ? "The person attached an image." : null);
-  const conversation = conversationBlock(input.thread, input.question, input.mentioned, imageNote);
+  const note = [imageNote, input.underHeadline ? UNDER_HEADLINE_NOTE : null].filter(Boolean).join("\n");
+  const conversation = conversationBlock(input.thread, input.question, input.mentioned, note || null);
   const result: PipelineResult = {
     outcome: "error",
     reason: null,
@@ -233,7 +245,10 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     result.timings.triageMs = Math.round(performance.now() - stepStarted);
     result.reason = triage.reason.trim().slice(0, 500) || null;
     if (!triage.respond) {
-      result.outcome = "silent";
+      // Only a top-level message can be a headline: its thread is where the request follows.
+      const topLevel = !input.inThread && input.thread.length === 0;
+      const headline = triage.headline && input.agent.headlineThreads && topLevel;
+      result.outcome = headline ? "headline" : "silent";
       return finish();
     }
 

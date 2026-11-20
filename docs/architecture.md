@@ -43,11 +43,19 @@ status are tables.
    than 15 minutes (no late answers after downtime). Top-level messages
    count in reply mode "questions", or with a mention; thread replies count
    with a mention, or as follow-ups in threads the agent answered (if the
-   agent allows it and the reply mentions nobody else).
+   agent allows it and the reply mentions nobody else), or under a headline
+   (below) when the poster replies.
 3. **Record the exchange.** One row per Slack message (unique on channel and
    message timestamp), so a redelivered event stops here.
 4. **Triage** (`agent/pipeline.ts`): one model call decides whether to answer
    and writes one to three search queries. Most chatter ends here, silently.
+   A top-level message that only names a topic is a **headline** (if the
+   agent waits for requests): the agent posts its headline message, if any,
+   and treats the poster's replies in that thread as the request. Each such
+   reply waits 30 seconds outside the queue (`Bot.later`, lost on a
+   restart), then goes ahead only if the poster wrote nothing newer (the
+   newest reply answers for all, with the earlier ones as thread) and no
+   colleague replied.
 5. **Search** every knowledge source with every query, in parallel; merge
    the passages by rank (at most 12) and give each a ref (`S1`, `S2`, …).
 6. **Answer:** one model call with the passages, the thread and the
@@ -57,7 +65,8 @@ status are tables.
    to the cited passages. The model never writes links of its own into that
    line. Links in the answer stay links only when their URL appears in the
    passages or the instructions; others keep just their text. Without an
-   answer, the agent posts its escalation message or stays silent; on
+   answer, the agent posts its escalation message or stays silent; under a
+   headline, its headline message; on
    errors it posts the error message from the settings and alerts the alert
    channel. `agent/reply.ts` renders every reply.
 8. **Update the exchange** with outcome, sources, model, tokens and timing.

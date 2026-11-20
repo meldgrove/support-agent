@@ -1,4 +1,4 @@
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { exchanges } from "../db/schema";
 import { cleanSlackText } from "../agent/slack-format";
@@ -41,6 +41,8 @@ const HANDLED_SUBTYPES = new Set([undefined, "file_share", "thread_broadcast"]);
 /** Events older than this are skipped (a backlog after downtime gets no late answers). */
 const MAX_EVENT_AGE_MS = 15 * 60_000;
 const MAX_IMAGES = 3;
+/** After a reply under a headline, how long to wait for more of the request before answering. */
+export const HEADLINE_WAIT_MS = 30_000;
 
 export type HandlerDeps = {
   db: Db;
@@ -49,9 +51,20 @@ export type HandlerDeps = {
   runPipeline?: (input: PipelineInput) => Promise<PipelineResult>;
   alert?: (agent: AgentRuntime, channel: string, message: string) => void;
   now?: () => number;
+  /** Runs a task after a delay (the bot queues it then); without it, the task runs at once. */
+  later?: (delayMs: number, task: () => Promise<void>) => void;
 };
 
 const mentionsOf = (text: string) => [...text.matchAll(/<@([UW][A-Z0-9]+)>/g)].map((match) => match[1]!);
+
+type Consider = {
+  consider: boolean;
+  mentioned: boolean;
+  /** A reply of the poster under their headline: answered after a wait for more of the request. */
+  underHeadline: boolean;
+  /** The headline itself is still being decided. */
+  headlinePending: boolean;
+};
 
 /** Whether the agent should consider the message at all (before any model call). */
 export async function shouldConsider(
@@ -59,33 +72,68 @@ export async function shouldConsider(
   agent: AgentRuntime,
   event: MessageEvent,
   botUserId: string | null,
-): Promise<{ consider: boolean; mentioned: boolean }> {
+): Promise<Consider> {
   const text = event.text ?? "";
   const mentions = mentionsOf(text);
   const mentioned = Boolean(botUserId && mentions.includes(botUserId));
+  const no = { consider: false, mentioned, underHeadline: false, headlinePending: false };
   const isReply = Boolean(event.thread_ts && event.thread_ts !== event.ts);
-  if (!isReply) return { consider: mentioned || agent.replyMode === "questions", mentioned };
-  if (mentioned) return { consider: true, mentioned };
-  if (!agent.followUpsInThreads || !agent.id) return { consider: false, mentioned };
-  // Replies addressed to someone else are for people.
-  if (mentions.some((id) => id !== botUserId)) return { consider: false, mentioned };
-  const [answered] = await deps.db
-    .select({ id: exchanges.id })
+  if (!isReply) return { ...no, consider: mentioned || agent.replyMode === "questions" };
+  if (mentioned) return { ...no, consider: true };
+  if (!agent.id || (!agent.followUpsInThreads && !agent.headlineThreads)) return no;
+  const rows = await deps.db
+    .select({
+      outcome: exchanges.outcome,
+      messageTs: exchanges.messageTs,
+      slackUserId: exchanges.slackUserId,
+    })
     .from(exchanges)
     .where(
       and(
         eq(exchanges.channelId, event.channel),
         eq(exchanges.agentId, agent.id),
-        eq(exchanges.outcome, "answered"),
+        inArray(exchanges.outcome, ["answered", "headline", "pending"]),
         or(eq(exchanges.threadTs, event.thread_ts!), eq(exchanges.messageTs, event.thread_ts!)),
       ),
-    )
-    .limit(1);
-  return { consider: Boolean(answered), mentioned };
+    );
+  if (rows.some((row) => row.outcome === "answered")) {
+    if (!agent.followUpsInThreads) return no;
+    // Replies addressed to someone else are for people.
+    if (mentions.some((id) => id !== botUserId)) return no;
+    return { ...no, consider: true };
+  }
+  // Under a headline only the poster's replies count; the triage decides on mentions there.
+  const root = rows.find((row) => row.messageTs === event.thread_ts);
+  const headline = root?.outcome === "headline" || root?.outcome === "pending";
+  if (agent.headlineThreads && headline && root?.slackUserId === event.user) {
+    return { ...no, consider: true, underHeadline: true, headlinePending: root.outcome === "pending" };
+  }
+  return no;
 }
 
-/** Handles one Slack message: decide, answer in the thread, record the exchange. */
-export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Promise<void> {
+/**
+ * After the headline wait: whether the poster wrote more since (the newest
+ * reply answers for all), or a colleague replied (a person took over).
+ * Answers anyway when Slack can't tell.
+ */
+async function movedOn(slack: SlackPort, event: MessageEvent, botUserId: string | null): Promise<boolean> {
+  const authors = await slack.threadAuthors(event.channel, event.thread_ts!).catch(() => null);
+  if (!authors) return false;
+  return authors.some(
+    (author) =>
+      (author.userId === event.user && Number(author.ts) > Number(event.ts)) ||
+      (author.userId !== null &&
+        author.userId !== event.user &&
+        author.userId !== botUserId &&
+        !author.fromBot),
+  );
+}
+
+/**
+ * Handles one Slack message: decide, answer in the thread, record the exchange.
+ * `waited`: a reply under a headline coming back after its wait.
+ */
+export async function handleMessage(deps: HandlerDeps, event: MessageEvent, waited = false): Promise<void> {
   const { slack } = deps;
   const current = deps.config();
   if (!HANDLED_SUBTYPES.has(event.subtype)) return;
@@ -100,8 +148,29 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Pro
     return;
   }
 
-  const { consider, mentioned } = await shouldConsider(deps, agent, event, botUserId);
+  const { consider, mentioned, underHeadline, headlinePending } = await shouldConsider(
+    deps,
+    agent,
+    event,
+    botUserId,
+  );
   if (!consider) return;
+  if (underHeadline && (!waited || headlinePending)) {
+    // The request may come in several messages: answer once, after the poster paused.
+    // While the headline is still being decided, wait again (up to MAX_EVENT_AGE_MS).
+    const task = () => handleMessage(deps, event, true);
+    if (deps.later) deps.later(HEADLINE_WAIT_MS, task);
+    else if (!waited) await task();
+    return;
+  }
+  // Every reply back from the wait, also one whose thread got answered meanwhile.
+  if (waited && (await movedOn(slack, event, botUserId))) {
+    logger.info(
+      { channelId: event.channel },
+      "skipping a reply under a headline: the poster or a colleague wrote since",
+    );
+    return;
+  }
 
   const question = cleanSlackText(event.text ?? "", botUserId).slice(0, 4000);
   const keepText = current.settings.retentionDays > 0;
@@ -159,6 +228,8 @@ export async function handleMessage(deps: HandlerDeps, event: MessageEvent): Pro
       images,
       mentioned,
       imageNote,
+      inThread: Boolean(event.thread_ts && event.thread_ts !== event.ts),
+      underHeadline,
     });
     reply = replyFor(result, agent, current.settings.errorMessage);
     if (reply?.text) {

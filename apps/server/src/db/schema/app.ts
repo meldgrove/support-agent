@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { DEFAULT_HEADLINE_MESSAGE } from "@support-agent/shared/api/agents";
 import type { SearchApiConfig } from "@support-agent/shared/api/knowledge";
 import { users } from "./auth";
 
@@ -58,6 +59,8 @@ export const agents = pgTable("agents", {
   /** NoAnswerMode */
   noAnswerMode: text("no_answer_mode").notNull().default("escalate"),
   escalationMessage: text("escalation_message").notNull().default(""),
+  headlineThreads: boolean("headline_threads").notNull().default(false),
+  headlineMessage: text("headline_message").notNull().default(DEFAULT_HEADLINE_MESSAGE),
   displayName: text("display_name"),
   iconUrl: text("icon_url"),
   readImages: boolean("read_images").notNull().default(true),

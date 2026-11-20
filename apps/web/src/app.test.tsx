@@ -43,6 +43,8 @@ const agent: Agent = {
   followUpsInThreads: true,
   noAnswerMode: "escalate",
   escalationMessage: "Please ask the IT team.",
+  headlineThreads: false,
+  headlineMessage: "",
   displayName: null,
   iconUrl: null,
   readImages: false,

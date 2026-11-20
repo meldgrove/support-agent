@@ -1,4 +1,12 @@
-import { CircleAlert, CircleCheck, CircleDashed, CircleHelp, CircleMinus, Loader } from "lucide-react";
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleEllipsis,
+  CircleHelp,
+  CircleMinus,
+  Loader,
+} from "lucide-react";
 import type { Outcome } from "@support-agent/shared/api/agents";
 import type { BotState } from "@support-agent/shared/api/status";
 import { Badge } from "@meldgrove/ui/badge";
@@ -10,6 +18,7 @@ export const outcomeMessages = defineMessages({
     pending: "In progress",
     answered: "Answered",
     silent: "Stayed silent",
+    headline: "Waits for the request",
     no_answer: "No answer found",
     error: "Error",
   },
@@ -17,6 +26,7 @@ export const outcomeMessages = defineMessages({
     pending: "In Bearbeitung",
     answered: "Beantwortet",
     silent: "Hat geschwiegen",
+    headline: "Wartet auf die Anfrage",
     no_answer: "Keine Antwort gefunden",
     error: "Fehler",
   },
@@ -26,6 +36,7 @@ const OUTCOME_STYLE: Record<Outcome, string> = {
   pending: "border-border text-muted-foreground",
   answered: "bg-success/15 text-success border-success/30",
   silent: "bg-muted text-muted-foreground",
+  headline: "border-primary/30 text-primary",
   no_answer: "bg-warning/15 text-foreground border-warning/40",
   error: "bg-destructive/10 text-destructive border-destructive/30",
 };
@@ -34,6 +45,7 @@ const OUTCOME_ICON = {
   pending: Loader,
   answered: CircleCheck,
   silent: CircleMinus,
+  headline: CircleEllipsis,
   no_answer: CircleHelp,
   error: CircleAlert,
 } satisfies Record<Outcome, unknown>;

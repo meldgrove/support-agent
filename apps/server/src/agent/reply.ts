@@ -8,7 +8,7 @@ export type Reply = {
   /**
    * Whether Slack may turn bare URLs and names in the text into links. Never
    * for a model's answer, whose only links are the allowed ones it carries;
-   * kept for the texts an admin configured (escalation and error message).
+   * kept for the texts an admin configured (escalation, headline and error message).
    */
   autoLinkUrls: boolean;
 };
@@ -16,13 +16,13 @@ export type Reply = {
 /**
  * The reply to a pipeline result, or null to post nothing. The only place
  * that renders what the bot posts: the model's answer with links to allowed
- * URLs only and a line of links to the cited passages, the escalation
- * message (escaped), or the error message (as written). `errorMessage` null
+ * URLs only and a line of links to the cited passages, the escalation or
+ * headline message (escaped), or the error message (as written). `errorMessage` null
  * posts nothing for an error (saved tests).
  */
 export function replyFor(
   result: Pick<PipelineResult, "outcome" | "answer" | "sources" | "citedRefs">,
-  agent: Pick<AgentRuntime, "instructions" | "noAnswerMode" | "escalationMessage">,
+  agent: Pick<AgentRuntime, "instructions" | "noAnswerMode" | "escalationMessage" | "headlineMessage">,
   errorMessage: string | null,
 ): Reply | null {
   switch (result.outcome) {
@@ -37,6 +37,10 @@ export function replyFor(
     }
     case "error":
       return errorMessage === null ? null : { text: errorMessage, autoLinkUrls: true };
+    case "headline": {
+      const message = agent.headlineMessage.trim();
+      return message ? { text: escapeMrkdwn(message), autoLinkUrls: true } : null;
+    }
     case "silent":
       return null;
   }

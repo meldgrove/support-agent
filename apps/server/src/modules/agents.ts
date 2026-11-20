@@ -64,6 +64,8 @@ async function toAgents(db: DbOrTx, rows: Row[]): Promise<Agent[]> {
     followUpsInThreads: row.followUpsInThreads,
     noAnswerMode: row.noAnswerMode as NoAnswerMode,
     escalationMessage: row.escalationMessage,
+    headlineThreads: row.headlineThreads,
+    headlineMessage: row.headlineMessage,
     displayName: row.displayName,
     iconUrl: row.iconUrl,
     readImages: row.readImages,
@@ -180,6 +182,8 @@ function columns(input: AgentInput) {
     followUpsInThreads: input.followUpsInThreads,
     noAnswerMode: input.noAnswerMode,
     escalationMessage: input.escalationMessage,
+    headlineThreads: input.headlineThreads,
+    headlineMessage: input.headlineMessage,
     displayName: input.displayName,
     iconUrl: input.iconUrl,
     readImages: input.readImages,
@@ -267,14 +271,23 @@ export function judge(
   if (result.outcome === "error") return { passed: false, failure: `Error: ${result.error ?? "unknown"}` };
   if (test.expectation === "silent") {
     if (result.slackText === null) return { passed: true, failure: null };
+    const failures: Partial<Record<PipelineResult["outcome"], string>> = {
+      answered: "The agent answered",
+      headline: "The agent posted its headline message",
+    };
+    return { passed: false, failure: failures[result.outcome] ?? "The agent posted its no-answer message" };
+  }
+  if (test.expectation === "headline") {
+    if (result.outcome === "headline") return { passed: true, failure: null };
     return {
       passed: false,
-      failure:
-        result.outcome === "answered" ? "The agent answered" : "The agent posted its no-answer message",
+      failure: `The agent didn't take the message for a headline: ${result.reason ?? "no reason given"}`,
     };
   }
   if (result.outcome === "silent")
     return { passed: false, failure: `The agent stayed silent: ${result.reason ?? "no reason given"}` };
+  if (result.outcome === "headline")
+    return { passed: false, failure: "The agent took the message for a headline and waits for the request" };
   if (result.outcome === "no_answer") return { passed: false, failure: "The agent found no answer" };
   if (test.expectedUrl) {
     const cited = result.sources.filter((source) => result.citedRefs.includes(source.ref) && source.url);

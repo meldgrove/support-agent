@@ -93,6 +93,12 @@ export const messages = defineMessages({
     noAnswerMode_silent: "Stay silent",
     noAnswerModeHint_silent: "Says nothing, so a person can answer.",
     escalationMessage: "Message when there's no answer",
+    headlines: "Wait for the request after a headline",
+    headlinesHint:
+      'When a message only names a topic ("Question about the VPN"), the agent answers the poster\'s replies in its thread. It waits 30 seconds after each reply, so a request in several messages gets one answer.',
+    headlineMessage: "Message under a headline",
+    headlineMessageHint:
+      "For example, a request to write the whole request in one message. Empty posts nothing.",
     readImages: "Read images",
     readImagesHint:
       "Looks at screenshots attached to questions. Needs a model that reads images and the files:read scope.",
@@ -175,6 +181,7 @@ export const messages = defineMessages({
     expectAnswer: "Should answer",
     expectAnswerUrl: "Should answer, citing {url}",
     expectSilent: "Should stay silent",
+    expectHeadline: "Should wait for the request",
     passed: "Passed",
     failed: "Failed",
     notRun: "Not run yet",
@@ -190,6 +197,9 @@ export const messages = defineMessages({
     expectationHint_answer: "The agent posts an answer.",
     expectation_silent: "Should stay silent",
     expectationHint_silent: "The agent posts nothing.",
+    expectation_headline: "Should wait for the request",
+    expectationHint_headline:
+      "The message only names a topic: the agent waits for the request in the thread (after its headline message, if set).",
     expectedUrl: "Must cite this URL",
     expectedUrlHint: "Optional: the answer must link to this page.",
     actionsFor: "Actions for this test",
@@ -293,6 +303,12 @@ export const messages = defineMessages({
     noAnswerMode_silent: "Schweigen",
     noAnswerModeHint_silent: "Sagt nichts, damit ein Mensch antworten kann.",
     escalationMessage: "Nachricht, wenn es keine Antwort gibt",
+    headlines: "Nach einer Überschrift auf die Anfrage warten",
+    headlinesHint:
+      "Nennt eine Nachricht nur ein Thema („Frage zum VPN“), beantwortet der Agent die Antworten der Person in ihrem Thread. Er wartet nach jeder Antwort 30 Sekunden, damit eine Anfrage in mehreren Nachrichten eine Antwort bekommt.",
+    headlineMessage: "Nachricht unter einer Überschrift",
+    headlineMessageHint:
+      "Zum Beispiel die Bitte, die ganze Anfrage in eine Nachricht zu schreiben. Leer postet nichts.",
     readImages: "Bilder lesen",
     readImagesHint:
       "Sieht sich Screenshots in Fragen an. Braucht ein Modell, das Bilder lesen kann, und den Scope files:read.",
@@ -373,6 +389,7 @@ export const messages = defineMessages({
     expectAnswer: "Soll antworten",
     expectAnswerUrl: "Soll antworten und {url} zitieren",
     expectSilent: "Soll schweigen",
+    expectHeadline: "Soll auf die Anfrage warten",
     passed: "Bestanden",
     failed: "Fehlgeschlagen",
     notRun: "Noch nicht ausgeführt",
@@ -388,6 +405,9 @@ export const messages = defineMessages({
     expectationHint_answer: "Der Agent postet eine Antwort.",
     expectation_silent: "Soll schweigen",
     expectationHint_silent: "Der Agent postet nichts.",
+    expectation_headline: "Soll auf die Anfrage warten",
+    expectationHint_headline:
+      "Die Nachricht nennt nur ein Thema: Der Agent wartet im Thread auf die Anfrage (nach seiner Nachricht unter Überschriften, falls gesetzt).",
     expectedUrl: "Muss diese URL zitieren",
     expectedUrlHint: "Optional: Die Antwort muss auf diese Seite verlinken.",
     actionsFor: "Aktionen für diesen Test",

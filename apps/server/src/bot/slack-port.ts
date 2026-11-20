@@ -26,8 +26,12 @@ export interface SlackPort {
     beforeTs: string,
     botUserId: string | null,
   ): Promise<ThreadMessage[]>;
+  /** Who wrote each message of a thread, oldest first (no texts). */
+  threadAuthors(channel: string, threadTs: string): Promise<ThreadAuthor[]>;
   downloadImage(file: SlackFile): Promise<ImageInput | null>;
 }
+
+export type ThreadAuthor = { ts: string; userId: string | null; fromBot: boolean };
 
 export type SlackFile = {
   mimetype?: string;
@@ -110,6 +114,16 @@ export function webSlackPort(client: WebClient, botToken: string): SlackPort {
           text: cleanSlackText(message.text ?? "", botUserId).slice(0, 2000),
         }))
         .filter((message) => message.text !== "");
+    },
+    async threadAuthors(channel, threadTs) {
+      const response = await client.conversations.replies({ channel, ts: threadTs, limit: 100 });
+      return (response.messages ?? [])
+        .filter((message) => message.ts)
+        .map((message) => ({
+          ts: message.ts!,
+          userId: message.user ?? null,
+          fromBot: Boolean(message.bot_id),
+        }));
     },
     async downloadImage(file) {
       const url = file.url_private_download ?? file.url_private;

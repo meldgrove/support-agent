@@ -1,6 +1,7 @@
 import {
   agentInputSchema,
   DEFAULT_ESCALATION_MESSAGE,
+  DEFAULT_HEADLINE_MESSAGE,
   DEFAULT_INSTRUCTIONS,
   type Agent,
   type AgentInput,
@@ -21,6 +22,8 @@ export type AgentFormValues = {
   followUpsInThreads: boolean;
   noAnswerMode: NoAnswerMode;
   escalationMessage: string;
+  headlineThreads: boolean;
+  headlineMessage: string;
   displayName: string;
   iconUrl: string;
   readImages: boolean;
@@ -28,7 +31,7 @@ export type AgentFormValues = {
   knowledgeSourceIds: string[];
 };
 
-/** Values of a saved agent, or of a new one (off, default instructions and escalation message). */
+/** Values of a saved agent, or of a new one (off, default instructions, escalation and headline message). */
 export function toFormValues(agent: Agent | null): AgentFormValues {
   if (!agent) {
     return {
@@ -43,6 +46,8 @@ export function toFormValues(agent: Agent | null): AgentFormValues {
       followUpsInThreads: true,
       noAnswerMode: "escalate",
       escalationMessage: DEFAULT_ESCALATION_MESSAGE,
+      headlineThreads: true,
+      headlineMessage: DEFAULT_HEADLINE_MESSAGE,
       displayName: "",
       iconUrl: "",
       readImages: false,
@@ -62,6 +67,8 @@ export function toFormValues(agent: Agent | null): AgentFormValues {
     followUpsInThreads: agent.followUpsInThreads,
     noAnswerMode: agent.noAnswerMode,
     escalationMessage: agent.escalationMessage,
+    headlineThreads: agent.headlineThreads,
+    headlineMessage: agent.headlineMessage,
     displayName: agent.displayName ?? "",
     iconUrl: agent.iconUrl ?? "",
     readImages: agent.readImages,
