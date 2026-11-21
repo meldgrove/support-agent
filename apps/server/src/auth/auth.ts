@@ -92,6 +92,9 @@ function createAuth() {
             scopes: settings.OIDC_SCOPES.split(/\s+/).filter(Boolean),
             pkce: settings.OIDC_PKCE,
             // Only people an admin added (or ADMIN_EMAILS) can sign in.
+            // `disableImplicitSignUp` alone still lets a sign-in request ask
+            // for a new account (`requestSignUp`).
+            disableSignUp: true,
             disableImplicitSignUp: true,
             // Name and picture follow the provider at every sign-in.
             overrideUserInfo: true,
