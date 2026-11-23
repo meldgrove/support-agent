@@ -37,5 +37,10 @@
     "sentry": "0.49.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.28.2"
+    }
   }
 }
