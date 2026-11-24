@@ -98,6 +98,16 @@ const schema = z
         value === undefined ? DEFAULT_UPDATER_URL : typeof value === "string" ? value.trim() : value,
       z.union([z.literal(""), z.url({ protocol: /^https?$/ })]),
     ),
+    /**
+     * The bearer token the app sends to the updater's API. compose.yaml gives
+     * the updater the same value (API_TOKEN), and it then refuses requests
+     * without it. Unset: no token.
+     */
+    UPDATER_TOKEN: optional(
+      z
+        .string()
+        .regex(/^[\x21-\x7e]+$/, "Only visible ASCII characters, without spaces (openssl rand -hex 32)"),
+    ),
     /** Error reports to Sentry or a compatible service; off when unset. */
     SENTRY_DSN: optional(z.url()),
     SENTRY_ENVIRONMENT: optional(z.string().max(64)),

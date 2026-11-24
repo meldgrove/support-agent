@@ -1,6 +1,9 @@
 // Bundles the server into dist/main.mjs. npm dependencies stay external (they
 // are installed in the image); the workspace package (@support-agent/shared) and
 // the imported devDependency @sentry/node are bundled.
+// @meldgrove/ui/updates/server (the update routes) is bundled too: @meldgrove/ui
+// is a root devDependency, so the image's production install leaves out the
+// package and its React peers.
 import { build } from "esbuild";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";

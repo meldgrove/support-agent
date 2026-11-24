@@ -76,8 +76,10 @@ run the commands as root (`sudo -i`).
 4. **Create `.env`** from `.env.example` (`cp .env.example .env`,
    `chmod 600 .env`) and set production values: `SUPPORT_AGENT_VERSION` (the
    newest release, such as `0.1.0`), `APP_URL`, `DATABASE_URL`, new secrets
-   (`openssl rand -base64 32` for `AUTH_SECRET` and `ENCRYPTION_KEY`), the
-   `OIDC_*` values and your address in `ADMIN_EMAILS`. Remove
+   (`openssl rand -base64 32` for `AUTH_SECRET` and `ENCRYPTION_KEY`), an
+   `UPDATER_TOKEN` (`openssl rand -hex 32`, recommended: [it protects the
+   update service](#protect-the-update-service)), the `OIDC_*` values and
+   your address in `ADMIN_EMAILS`. Remove
    `NODE_ENV=development` and `RUN_MIGRATIONS`. Without a database of your
    own, add `COMPOSE_FILE=compose.yaml:compose.postgres.yaml`, a
    `POSTGRES_PASSWORD` (`openssl rand -hex 32`) and
@@ -191,7 +193,11 @@ themselves.
 
 Without the `updater` service, the button says that there is no update
 service; `UPDATER_URL` ([Configuration](configuration.md#updates)) points
-the app to it.
+the app to it. Only the app reaches the updater's API; never publish its
+port. With `UPDATER_TOKEN` set, the app sends it with each request and the
+updater refuses requests without it; without it, anything that reaches the
+updater on the Docker network could install an offered update or switch the
+channel.
 
 ### Setup on the server
 
@@ -233,6 +239,27 @@ three steps, as root in `/srv/support-agent`:
 Until the host setup runs again, the updater follows the tag in
 `SUPPORT_AGENT_VERSION` as before, and the settings say that choosing the
 channel needs it.
+
+### Protect the update service
+
+Recommended for installations set up before `UPDATER_TOKEN` existed;
+without it, everything works as before. Until it is done, **Settings →
+Updates** warns that the update service takes requests without a token
+(with updater 0.2.4 or later, which reports it). Do it once the support
+agent runs the release whose notes name this step, or a newer one
+(**Settings → Updates** shows the installed version): an older version does
+not send the token, and its update button would get no answer from the
+updater. As root in `/srv/support-agent`:
+
+```sh
+git pull
+# in .env: UPDATER_TOKEN=<the output of: openssl rand -hex 32>
+docker compose up -d --pull always
+```
+
+`git pull` brings the `compose.yaml` that passes the token to the app and to
+the updater (as `API_TOKEN`); `--pull always` makes sure the updater is one
+that checks it. Then the updater answers only the app.
 
 ## Backups
 

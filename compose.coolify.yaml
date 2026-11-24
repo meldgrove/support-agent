@@ -24,8 +24,10 @@ x-app-environment: &app-environment
   OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET}
   # The reverse proxy in front of the app sets X-Forwarded-For.
   TRUST_PROXY: ${TRUST_PROXY:-true}
-  # The update button asks `updater` (below).
+  # The update button asks `updater` (below), with UPDATER_TOKEN
+  # (recommended; openssl rand -hex 32), which the updater then requires.
   UPDATER_URL: ${UPDATER_URL:-http://updater:8080}
+  UPDATER_TOKEN: ${UPDATER_TOKEN:-}
 
 x-app: &app
   image: *image
@@ -95,6 +97,9 @@ services:
     environment:
       IMAGE: *image
       VERSION_VARIABLE: SUPPORT_AGENT_VERSION
+      # With UPDATER_TOKEN set, the API takes only requests that carry it, as
+      # the app's do. Empty: requests from anything on the Docker network.
+      API_TOKEN: ${UPDATER_TOKEN:-}
       DEPLOY_HOOK_URL: ${UPDATE_DEPLOY_HOOK_URL:-}
       DEPLOY_HOOK_TOKEN: ${UPDATE_DEPLOY_HOOK_TOKEN:-}
       # A release installs once it has been out this long, and only inside

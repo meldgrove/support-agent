@@ -39,7 +39,6 @@ apps/server/src/
   agent/           pipeline (triage → search → answer), reply, prompts, Slack formatting, runtime loading
   bot/             Socket Mode process, message handler, Slack port, config store, maintenance
   slack/           Web API helpers, app manifest
-  updater/         client of the Meldgrove Updater's API (update button, modules/updates.ts)
 apps/web/src/      admin app
 packages/shared/src/api/  request and response schemas
 ```
@@ -48,7 +47,10 @@ packages/shared/src/api/  request and response schemas
 
 - **Contracts first.** Change a request or response in
   `packages/shared/src/api/` and use it on both sides; routes validate input
-  with it (`jsonBody`, `queryOf`).
+  with it (`jsonBody`, `queryOf`). The update routes (`modules/updates.ts`)
+  are the exception: their contract and their handler come from
+  `@meldgrove/ui/updates/server` (a root devDependency that the server's
+  build bundles); the app adds the admin check and the audit log.
 - **Access:** every route calls `requireUser(c)` or `requireAdmin(c)` first.
   Providers, keys, Slack, users, settings and the audit log are admin-only.
 - **Secrets** (API keys, tokens, search secrets) are stored with

@@ -138,3 +138,6 @@ version that needs upgrade steps on the server says so; take the steps
 first. **Settings → Updates** shows the installed version and the channel:
 **Stable** (releases, recommended) or **Preview** (every change before its
 release). How the server installs updates: [Deployment](deployment.md#automatic-updates).
+When the section warns that the update service takes requests without a
+token, ask the person who runs the server to [protect
+it](deployment.md#protect-the-update-service).
