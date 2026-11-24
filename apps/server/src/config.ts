@@ -135,7 +135,11 @@ const schema = z
     }
     for (const email of splitList(value.ADMIN_EMAILS)) {
       if (!z.email().safeParse(email).success) {
-        ctx.addIssue({ code: "custom", path: ["ADMIN_EMAILS"], message: `Not an email address: ${email}` });
+        ctx.addIssue({
+          code: "custom",
+          path: ["ADMIN_EMAILS"],
+          message: "Each entry must be an email address",
+        });
       }
     }
   });
