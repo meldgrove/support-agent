@@ -42,3 +42,14 @@ describe("a database error", () => {
     expect((await list()).stderr).toBe("Something went wrong. Try again. (database error 22001)\n");
   });
 });
+
+describe("an unexpected error", () => {
+  it("prints the page's generic message; the error goes to the log", async () => {
+    vi.spyOn(slack, "status").mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5:5432"));
+    const { providers } = await import("./providers");
+    vi.spyOn(providers, "entries").mockResolvedValue([]);
+    const { knowledgeSources } = await import("./knowledge-sources");
+    vi.spyOn(knowledgeSources, "entries").mockResolvedValue([]);
+    expect(await list()).toEqual({ code: 1, stdout: "", stderr: "Something went wrong. Try again.\n" });
+  });
+});

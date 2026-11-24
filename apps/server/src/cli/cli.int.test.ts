@@ -588,6 +588,15 @@ describe("cli settings … agents", () => {
     expect(
       await cli(["settings", "apply", "agents", "--id", agent.id], { ...body, version: agent.version }),
     ).toMatchObject({ code: 1, stderr: "Someone else changed this agent. Reload to see the changes.\n" });
+    // What docs/deployment.md says: start from show, with the channels as IDs.
+    const shown = (await cli(["settings", "show", "agents", "--id", agent.id])).json();
+    expect((await cli(["settings", "apply", "agents", "--id", agent.id], shown)).code).toBe(1);
+    const edited = await cli(["settings", "apply", "agents", "--id", agent.id], {
+      ...shown,
+      channels: shown.channels.map((channel: { id: string }) => channel.id),
+      enabled: false,
+    });
+    expect(edited.json()).toMatchObject({ enabled: false, version: 3, channels: [{ id: "C0HELPDESK1" }] });
     expect((await cli(["settings", "show", "agents"])).json().items).toHaveLength(1);
     expect((await cli(["settings", "test", "agents", "--id", agent.id])).code).toBe(2);
 

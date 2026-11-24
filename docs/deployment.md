@@ -237,6 +237,16 @@ needs a provider, a model and a channel.
 }
 ```
 
+To change an agent, start from what `show` prints: it keeps the `version`,
+and `jq` turns the channels, which `show` prints with their names, back into
+IDs:
+
+```sh
+docker compose run --rm -T migrate cli settings show agents --id <id> \
+  | jq '.channels |= map(.id) | .enabled = false' \
+  | docker compose run --rm -T migrate cli settings apply agents --id <id>
+```
+
 `app`, the **Settings** page (`retentionDays`: `0` keeps no texts;
 `workingReaction`: an emoji name, or `null`):
 

@@ -23,7 +23,7 @@ export class UsageError extends Error {
   }
 }
 
-/** The API's limit for JSON bodies. */
+/** The largest body the command reads; a settings body is a few KiB. */
 const MAX_BODY_BYTES = 512 * 1024;
 
 const tooLarge = () => new AppError(413, "payload_too_large", "The body is larger than 512 KiB");
@@ -31,21 +31,22 @@ const tooLarge = () => new AppError(413, "payload_too_large", "The body is large
 /**
  * A body pasted into a terminal (Coolify's): read in raw mode, so the
  * terminal shows nothing and does not cut a line at its 4 KiB limit. Ctrl-D
- * ends the body; Ctrl-C stops the command.
+ * ends the body; Ctrl-C stops the command. A body over the limit is read to
+ * its end without being kept, so that no part of it is shown.
  */
 function readPasted(): Promise<Buffer> {
   const stdin = process.stdin as ReadStream;
-  process.stderr.write("Paste the JSON body (it is not shown), then press Ctrl-D.\n");
   stdin.setRawMode(true);
+  process.stderr.write("Paste the JSON body (it is not shown), then press Ctrl-D.\n");
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
-    const finish = (error?: Error) => {
+    const finish = () => {
       stdin.off("data", onData);
       stdin.setRawMode(false);
       stdin.pause();
       process.stderr.write("\n");
-      if (error) reject(error);
+      if (size > MAX_BODY_BYTES) reject(tooLarge());
       else resolve(Buffer.concat(chunks));
     };
     const onData = (chunk: Buffer) => {
@@ -57,11 +58,8 @@ function readPasted(): Promise<Buffer> {
       }
       const part = end === -1 ? chunk : chunk.subarray(0, end);
       size += part.length;
-      if (size > MAX_BODY_BYTES) {
-        finish(tooLarge());
-        return;
-      }
-      chunks.push(part);
+      if (size <= MAX_BODY_BYTES) chunks.push(part);
+      else chunks.length = 0;
       if (end !== -1) finish();
     };
     stdin.on("data", onData);

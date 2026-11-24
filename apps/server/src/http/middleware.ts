@@ -7,7 +7,7 @@ import { resolvePrincipal } from "../auth/resolve";
 import type { UserPrincipal } from "../auth/principal";
 import { logger } from "../logger";
 import type { AppEnv } from "./env";
-import { AppError, forbidden, parseWith, unauthorized } from "./errors";
+import { AppError, badRequest, forbidden, parseWith, unauthorized } from "./errors";
 import { entityId, parseJsonBody } from "./json";
 
 export const requestId: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -69,7 +69,13 @@ export function requireAdmin(c: Context<AppEnv>): UserPrincipal {
 
 /** The JSON body validated with a shared schema. */
 export async function jsonBody<T extends z.ZodType>(c: Context<AppEnv>, schema: T): Promise<z.infer<T>> {
-  return parseJsonBody(await c.req.text(), schema);
+  let text: string;
+  try {
+    text = await c.req.text();
+  } catch {
+    throw badRequest("The request body must be JSON");
+  }
+  return parseJsonBody(text, schema);
 }
 
 export function queryOf<T extends z.ZodType>(c: Context<AppEnv>, schema: T): z.infer<T> {

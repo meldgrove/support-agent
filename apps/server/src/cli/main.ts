@@ -1,6 +1,6 @@
 import pg from "pg";
 import { AppError } from "../http/errors";
-import { isFailedQuery } from "../logger";
+import { isFailedQuery, logger } from "../logger";
 import { agents } from "./agents";
 import { app } from "./app";
 import { UsageError, type CliIo } from "./io";
@@ -49,8 +49,9 @@ or a body that is not JSON. Example bodies: ${DOCS}
 }
 
 /**
- * What went wrong, for stderr. A database error gets the page's generic
- * message: its text can quote values, and a failed query carries its parameters.
+ * What went wrong, for stderr. A database error or an unexpected one gets the
+ * page's generic message: its text can quote values, and a failed query
+ * carries its parameters.
  */
 function report(error: unknown, io: CliIo): number {
   if (error instanceof UsageError) {
@@ -71,7 +72,9 @@ function report(error: unknown, io: CliIo): number {
     );
     return 1;
   }
-  io.err(`${error instanceof Error ? error.message : String(error)}\n`);
+  // As on the page: the generic message, and the error in the log (stderr).
+  logger.error({ err: error }, "command failed");
+  io.err("Something went wrong. Try again.\n");
   return 1;
 }
 
