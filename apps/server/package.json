@@ -12,7 +12,8 @@
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "APP_ROLE=migrate tsx --env-file-if-exists=../../.env.local src/main.ts"
+    "db:migrate": "APP_ROLE=migrate tsx --env-file-if-exists=../../.env.local src/main.ts",
+    "cli": "tsx --env-file-if-exists=../../.env.local src/cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.8.0",

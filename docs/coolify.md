@@ -34,8 +34,20 @@ button, backups, logs and hardening are the same as on a server: see
 6. **Deploy**, open `APP_URL` and sign in with an address from
    `ADMIN_EMAILS`.
 7. **Continue in the admin interface:** the overview page lists the steps
-   (Slack, a provider, a knowledge source, an agent).
+   (Slack, a provider, a knowledge source, an agent). They can also be
+   taken in a terminal instead:
+   [Settings from the command line](#settings-from-the-command-line).
 8. **Automatic updates:** set them up as [below](#automatic-updates).
+
+## Settings from the command line
+
+In the resource, open **Terminal**, choose the `web` container and run
+`cli settings list`. `cli settings apply <name>` saves a JSON body from
+stdin, as the admin page does: paste the body (the terminal does not show
+it), then press Ctrl-D. For a list (`providers`, `knowledge-sources`,
+`agents`), `apply` without `--id` adds an entry and prints its ID. The
+commands, the setting names and an example body for each are in
+[Deployment](deployment.md#settings-from-the-command-line).
 
 ## Upgrades
 

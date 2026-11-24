@@ -7,7 +7,8 @@ instead, or stays silent and lets a person answer.
 
 Admins set everything up in a web interface: the model providers and their
 API keys, where the knowledge comes from, and any number of agents, each
-with its own instructions, Slack channels, model and knowledge.
+with its own instructions, Slack channels, model and knowledge. The same
+settings can be set on the server with `cli settings`, without a browser.
 
 ```
 #it-help ─── Slack (Socket Mode) ──▶ bot ──▶ 1. answer or stay silent?
@@ -47,7 +48,8 @@ admin interface ──▶ PostgreSQL ◀── bot reloads agents and settings o
 ## Documentation
 
 - [Deployment](docs/deployment.md): run it on a Linux server (Debian,
-  Ubuntu), sign-in, upgrades, automatic updates, backups.
+  Ubuntu), settings from the command line, sign-in, upgrades, automatic
+  updates, backups.
 - [Coolify](docs/coolify.md): run it on Coolify instead.
 - [Configuration](docs/configuration.md): every environment variable.
 - [Admin guide](docs/admin-guide.md): connect Slack, add providers and

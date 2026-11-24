@@ -6,6 +6,11 @@ case "$1" in
     shift
     exec node /app/apps/server/dist/main.mjs "$@"
     ;;
+  cli)
+    # The operator command (docs/deployment.md): `cli settings …`.
+    shift
+    exec node /app/apps/server/dist/cli.mjs "$@"
+    ;;
   *)
     exec "$@"
     ;;

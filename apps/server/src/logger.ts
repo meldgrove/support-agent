@@ -1,4 +1,5 @@
 import { pino, stdSerializers } from "pino";
+import { logTarget } from "./log-target";
 
 type FailedQuery = Error & { query: string; params: unknown[] };
 
@@ -6,7 +7,7 @@ type FailedQuery = Error & { query: string; params: unknown[] };
  * Drizzle's DrizzleQueryError, recognized by its fields rather than its class,
  * which a second copy of drizzle-orm would not share.
  */
-const isFailedQuery = (error: unknown): error is FailedQuery =>
+export const isFailedQuery = (error: unknown): error is FailedQuery =>
   error instanceof Error &&
   typeof (error as Partial<FailedQuery>).query === "string" &&
   Array.isArray((error as Partial<FailedQuery>).params);
@@ -30,30 +31,39 @@ export function serializeError(error: unknown) {
   };
 }
 
+const toStderr = logTarget() === "stderr";
+
 /**
  * Structured JSON logs. Never log message texts, answers, tokens or other
- * personal data; log identifiers instead.
+ * personal data; log identifiers instead. The operator command logs to stderr.
  */
-export const logger = pino({
-  level: process.env.LOG_LEVEL?.trim() || (process.env.NODE_ENV === "test" ? "silent" : "info"),
-  base: { role: process.env.APP_ROLE?.trim() || "all" },
-  serializers: { err: serializeError },
-  redact: {
-    paths: [
-      "password",
-      "token",
-      "secret",
-      "apiKey",
-      "*.password",
-      "*.token",
-      "*.secret",
-      "*.apiKey",
-      "authorization",
-      "cookie",
-    ],
-    censor: "[redacted]",
+export const logger = pino(
+  {
+    level: process.env.LOG_LEVEL?.trim() || (process.env.NODE_ENV === "test" ? "silent" : "info"),
+    base: { role: toStderr ? "cli" : process.env.APP_ROLE?.trim() || "all" },
+    serializers: { err: serializeError },
+    redact: {
+      paths: [
+        "password",
+        "token",
+        "secret",
+        "apiKey",
+        "botToken",
+        "appToken",
+        "*.password",
+        "*.token",
+        "*.secret",
+        "*.apiKey",
+        "*.botToken",
+        "*.appToken",
+        "authorization",
+        "cookie",
+      ],
+      censor: "[redacted]",
+    },
+    ...(process.env.NODE_ENV === "development" && process.stdout.isTTY && !toStderr
+      ? { transport: { target: "pino-pretty", options: { colorize: true, ignore: "pid,hostname" } } }
+      : {}),
   },
-  ...(process.env.NODE_ENV === "development" && process.stdout.isTTY
-    ? { transport: { target: "pino-pretty", options: { colorize: true, ignore: "pid,hostname" } } }
-    : {}),
-});
+  toStderr ? pino.destination({ fd: 2, sync: true }) : undefined,
+);

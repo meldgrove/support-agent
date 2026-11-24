@@ -19,6 +19,15 @@ the role:
 `compose.yaml` runs `web` and `bot` as separate containers, so the bot keeps
 answering while the admin interface is down or being deployed.
 
+The image's command `cli` runs the operator command (`src/cli.ts`, bundled
+as `dist/cli.mjs`; `/usr/local/bin/cli` in the image): `cli settings`
+lists, shows, applies, removes and tests what admins set in the admin
+interface. The routes and the command call the same service functions (in
+`modules/`); the command acts as the `operator` (`OperatorPrincipal`),
+which only it creates, with an admin's rights. It reads bodies from stdin,
+prints only its output on stdout and logs to stderr, starts no server or
+bot, and reports nothing to Sentry.
+
 PostgreSQL is the only stateful dependency: agents, providers, knowledge
 sources, encrypted credentials, the conversation log, sessions and the bot's
 status are tables.
@@ -87,8 +96,8 @@ message.
 
 ## Configuration changes
 
-The admin interface writes to the database and sends `NOTIFY
-support_agent_config` in the same transaction. The bot listens on that channel
+The admin interface and the operator command write to the database and send
+`NOTIFY support_agent_config` in the same transaction. The bot listens on that channel
 and reloads within a second; it also reloads every minute. When a reload
 fails (database unreachable), the bot keeps its last good configuration.
 When the Slack tokens change, it reconnects.

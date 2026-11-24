@@ -2,8 +2,9 @@
 
 The environment holds what the processes need to start: the database, the
 secrets, sign-in and the bot's limits. Everything else (Slack, model
-providers, knowledge sources, agents, retention) is set in the admin
-interface and stored in the database.
+providers, knowledge sources, agents, retention) is stored in the database
+and set in the admin interface, or on the server with `cli settings`
+([Settings from the command line](deployment.md#settings-from-the-command-line)).
 
 Blank values count as unset. A missing or invalid required value stops the
 process with a list of the problems.
