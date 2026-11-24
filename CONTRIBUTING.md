@@ -36,7 +36,9 @@ npm run build
 ```
 
 CI runs all of them, checks that the migrations match the schema, audits the
-production dependencies and builds the Docker image.
+production dependencies, builds the Docker image, and starts it with the
+compose files of the newest release (branch `stable`), as servers that have
+not pulled yet run it (`.github/compose-compat.env` holds fake settings).
 
 ## Database changes
 

@@ -9,7 +9,7 @@ import type { KnowledgeSource } from "@support-agent/shared/api/knowledge";
 import type { Provider } from "@support-agent/shared/api/providers";
 import type { SlackSettings } from "@support-agent/shared/api/slack";
 import type { Status } from "@support-agent/shared/api/status";
-import type { UpdatesResponse } from "@support-agent/shared/api/updates";
+import type { UpdatesResponse } from "@meldgrove/ui/updates";
 import type { Me, User } from "@support-agent/shared/api/users";
 import { DEFAULT_APP_SETTINGS } from "@support-agent/shared/api/settings";
 import { DEFAULT_SEARCH_API_CONFIG } from "@support-agent/shared/api/knowledge";

@@ -55,15 +55,22 @@ process refuses them unless it runs for development on this machine
 
 ## Updates
 
-| Variable      | Default               | Description                                                                                                                                                                                                                                                                                                             |
-| ------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `UPDATER_URL` | `http://updater:8080` | Where the update button of admins asks the `updater` service of `compose.yaml` ([Automatic updates](deployment.md#automatic-updates)). Under `compose.yaml`, an empty value falls back to this default. Only where the app reads its environment directly (`npm run dev`, `docker run`), empty switches the button off. |
+| Variable        | Default               | Description                                                                                                                                                                                                                                                                                                             |
+| --------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UPDATER_URL`   | `http://updater:8080` | Where the update button of admins asks the `updater` service of `compose.yaml` ([Automatic updates](deployment.md#automatic-updates)). Under `compose.yaml`, an empty value falls back to this default. Only where the app reads its environment directly (`npm run dev`, `docker run`), empty switches the button off. |
+| `UPDATER_TOKEN` | (none)                | Recommended: the token the app sends to the updater, which then refuses requests without it. Below.                                                                                                                                                                                                                     |
 
 The `updater` service itself takes `UPDATE_COOLDOWN`, `UPDATE_WINDOW`, `TZ`
 and, for a private image, `UPDATE_REGISTRY_USERNAME` and
 `UPDATE_REGISTRY_PASSWORD` (see `compose.yaml`). On Coolify, it also takes
 `UPDATE_DEPLOY_HOOK_URL` and `UPDATE_DEPLOY_HOOK_TOKEN`
 ([Coolify](coolify.md#automatic-updates)).
+
+`compose.yaml` and `compose.coolify.yaml` pass `UPDATER_TOKEN` to the app
+and, as `API_TOKEN`, to the updater; make it with `openssl rand -hex 32`.
+Without it, anything that reaches the updater on the Docker network could
+install an offered update
+([Protect the update service](deployment.md#protect-the-update-service)).
 
 ## Error reports
 

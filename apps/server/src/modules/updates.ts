@@ -1,91 +1,83 @@
 import { Hono, type Context } from "hono";
-import type { ContentfulStatusCode } from "hono/utils/http-status";
-import {
-  installUpdateSchema,
-  setUpdateChannelSchema,
-  type UpdatesResponse,
-} from "@support-agent/shared/api/updates";
+import { createUpdatesHandler } from "@meldgrove/ui/updates/server";
 import { config } from "../config";
 import { getDb } from "../db/client";
 import { audit } from "../core/audit";
 import type { AppEnv } from "../http/env";
-import { jsonBody, requireAdmin } from "../http/middleware";
-import { callUpdater, type UpdaterResult } from "../updater/client";
+import { requireAdmin } from "../http/middleware";
+import { logger } from "../logger";
 
 /**
  * The update button and the "Updates" settings: admin-only routes in front
- * of the updater. Every answer is an `UpdatesResponse`: 200 (202 when an
- * installation started); 409 with `error` and the latest status when the
- * updater refused; 200 with `reachable: false` when no updater answers. The
- * install route passes an updater's 5xx through: the button reconciles it
- * with the status instead of taking it as a refusal.
+ * of the Meldgrove Updater. The shared handler of @meldgrove/ui asks the
+ * updater at UPDATER_URL with UPDATER_TOKEN and answers as the button expects
+ * (docs/deployment.md, Automatic updates). The API's middleware has already
+ * refused changes from other sites (sameOrigin). Installations and channel
+ * switches the updater took go to the audit log.
  */
+const updates = createUpdatesHandler(() => ({
+  url: config().UPDATER_URL,
+  token: config().UPDATER_TOKEN,
+  appVersion: config().APP_VERSION ?? null,
+  logger,
+}));
+
 const router = new Hono<AppEnv>();
 
-async function answer(
-  c: Context<AppEnv>,
-  result: UpdaterResult,
-  options: { passServerErrors?: boolean } = {},
-) {
-  const app = { version: config().APP_VERSION ?? null };
-  if (result.kind === "ok") {
-    const body: UpdatesResponse = { app, reachable: true, updater: result.status, error: null };
-    return c.json(body, result.httpStatus === 202 ? 202 : 200);
-  }
-  if (result.kind === "unreachable") {
-    const body: UpdatesResponse = { app, reachable: false, updater: null, error: result.error };
-    return c.json(body);
-  }
-  // The reason, with the status that explains it (e.g. an installation runs).
-  const latest = await callUpdater("status");
-  const body: UpdatesResponse = {
-    app,
-    reachable: true,
-    updater: latest.kind === "ok" ? latest.status : null,
-    error: result.error,
-  };
-  const passed = options.passServerErrors && result.httpStatus >= 500 && result.httpStatus <= 599;
-  return c.json(body, passed ? (result.httpStatus as ContentfulStatusCode) : 409);
+router.get("/updates", (c) => {
+  requireAdmin(c);
+  return answer(c, updates.respond("status"));
+});
+
+router.post("/updates/check", (c) => {
+  requireAdmin(c);
+  return answer(c, updates.respond("check"));
+});
+
+router.post("/updates/install", (c) =>
+  change(c, "install", (body) => `Started the installation of ${body.version}`),
+);
+
+router.post("/updates/channel", (c) =>
+  change(
+    c,
+    "channel",
+    (body) => `Switched updates to the ${body.channel === "preview" ? "Preview" : "Stable"} channel`,
+  ),
+);
+
+/**
+ * The handler's answer as the route's response. Returned as it is, it would
+ * lose the headers that middleware set before the route (x-request-id).
+ */
+async function answer(c: Context<AppEnv>, pending: Response | Promise<Response>) {
+  const response = await pending;
+  return c.newResponse(response.body, response);
 }
 
-router.get("/updates", async (c) => {
-  requireAdmin(c);
-  const result = await callUpdater("status");
-  // The status never refuses; an error answer means no usable updater there.
-  return answer(c, result.kind === "refused" ? { kind: "unreachable", error: result.error } : result);
-});
-
-router.post("/updates/check", async (c) => {
-  requireAdmin(c);
-  return answer(c, await callUpdater("check"));
-});
-
-router.post("/updates/install", async (c) => {
+/**
+ * Passes a change to the updater and records it when the updater took it:
+ * an answer of 2xx from a reachable updater, without an error. The handler
+ * reads a copy of the body; it has checked the body when it took the change.
+ */
+async function change(
+  c: Context<AppEnv>,
+  action: "install" | "channel",
+  summary: (body: Record<string, unknown>) => string,
+) {
   const actor = requireAdmin(c);
-  const { version } = await jsonBody(c, installUpdateSchema);
-  const result = await callUpdater("install", { version });
-  if (result.kind === "ok") {
-    await audit(getDb(), actor, {
-      action: "updates.install",
-      entityType: "updates",
-      summary: `Started the installation of ${version}`,
-    });
+  const response = await updates.respond(action, c.req.raw.clone());
+  if (response.ok) {
+    const result = (await response.clone().json()) as { reachable?: boolean; error?: string | null };
+    if (result.reachable && result.error === null) {
+      await audit(getDb(), actor, {
+        action: `updates.${action}`,
+        entityType: "updates",
+        summary: summary(await c.req.json()),
+      });
+    }
   }
-  return answer(c, result, { passServerErrors: true });
-});
-
-router.post("/updates/channel", async (c) => {
-  const actor = requireAdmin(c);
-  const { channel } = await jsonBody(c, setUpdateChannelSchema);
-  const result = await callUpdater("channel", { channel });
-  if (result.kind === "ok") {
-    await audit(getDb(), actor, {
-      action: "updates.channel",
-      entityType: "updates",
-      summary: `Switched updates to the ${channel === "preview" ? "Preview" : "Stable"} channel`,
-    });
-  }
-  return answer(c, result);
-});
+  return answer(c, response);
+}
 
 export default router;

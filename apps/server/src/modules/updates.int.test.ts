@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UpdaterStatus } from "@support-agent/shared/api/updates";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { startFakeUpdater, updaterStatus, type FakeUpdater } from "@meldgrove/ui/updates/testing";
 import { getDb } from "../db/client";
 import { auditLog } from "../db/schema";
 import { resetConfigForTests } from "../config";
@@ -21,68 +21,28 @@ vi.mock("../auth/resolve", async () => {
   };
 });
 
-const STATUS: UpdaterStatus = {
-  updater: "0.2.0",
-  mode: "host",
-  channel: "stable",
-  channelLocked: null,
-  installed: "0.2.0",
-  available: {
-    version: "0.2.1",
-    preview: false,
-    publishedAt: "2026-11-18T08:00:00.000Z",
-    url: "https://github.com/meldgrove/support-agent/releases/tag/v0.2.1",
-    notes: ["Fix the sign-in loop"],
-    changes: 1,
-    installsAt: "2026-11-21T08:00:00.000Z",
-    failed: null,
-  },
-  attention: null,
-  installing: null,
-  last: null,
-  checking: false,
-  checkedAt: "2026-11-19T08:00:00.000Z",
-  error: null,
-  automatic: true,
-  cooldown: "3d",
-  window: "02:00-05:00",
-  timezone: "UTC",
-};
-const INSTALLING: UpdaterStatus = {
-  ...STATUS,
-  installing: { version: "0.2.1", startedAt: "2026-11-19T08:01:00.000Z", manual: true, stage: "requested" },
-};
+// The updater of these tests refuses requests without this token, as with API_TOKEN set.
+const TOKEN = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
+let updater: FakeUpdater;
 
-type Reply = { status: number; body: unknown } | Error;
-const calls: { url: string; method: string; body: unknown }[] = [];
-let replies: Reply[] = [];
+beforeAll(async () => {
+  updater = await startFakeUpdater({ token: TOKEN });
+});
+afterAll(() => updater.close());
 
 beforeEach(async () => {
   await resetDatabase();
-  process.env.UPDATER_URL = "http://updater.test:8080";
+  process.env.UPDATER_URL = updater.url;
+  process.env.UPDATER_TOKEN = TOKEN;
+  process.env.APP_VERSION = "0.2.0";
   resetConfigForTests();
-  calls.length = 0;
-  replies = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (url: string, init?: RequestInit) => {
-      calls.push({
-        url,
-        method: init?.method ?? "GET",
-        body: init?.body ? JSON.parse(String(init.body)) : null,
-      });
-      const reply = replies.shift() ?? new TypeError("fetch failed");
-      if (reply instanceof Error) throw reply;
-      return new Response(JSON.stringify(reply.body), {
-        status: reply.status,
-        headers: { "content-type": "application/json" },
-      });
-    }),
-  );
+  updater.calls.length = 0;
+  updater.respond(() => ({ body: updaterStatus() }));
 });
 afterEach(() => {
-  vi.unstubAllGlobals();
   delete process.env.UPDATER_URL;
+  delete process.env.UPDATER_TOKEN;
+  delete process.env.APP_VERSION;
   resetConfigForTests();
 });
 
@@ -100,7 +60,7 @@ describe("access", () => {
       expect((await request(method, path, { body })).status).toBe(401);
       expect((await request(method, path, { userId: editor.id, body })).status).toBe(403);
     }
-    expect(calls).toEqual([]);
+    expect(updater.calls).toEqual([]);
   });
 
   it("rejects cross-site changes before calling the updater", async () => {
@@ -116,188 +76,121 @@ describe("access", () => {
       body: JSON.stringify({ version: "0.2.1" }),
     });
     expect(response.status).toBe(403);
-    expect(calls).toEqual([]);
+    expect(updater.calls).toEqual([]);
   });
 });
 
 describe("updates", () => {
-  it("answers with the updater's status and the app's version", async () => {
+  it("gives admins the updater's status, asked with UPDATER_TOKEN", async () => {
     const admin = await createUser("admin");
-    replies = [{ status: 200, body: STATUS }];
-    const response = await request("GET", "/api/v1/updates", { userId: admin.id });
-    expect(response).toEqual({
-      status: 200,
-      body: { app: { version: null }, reachable: true, updater: STATUS, error: null },
+    const { createApp } = await import("../http/app");
+    const response = await createApp().request("/api/v1/updates", {
+      headers: { "x-test-user": admin.id, "x-request-id": "updates-status-0001" },
     });
-    expect(calls).toEqual([{ url: "http://updater.test:8080/v1/status", method: "GET", body: null }]);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    // The headers of the app's middleware stay on the handler's answer.
+    expect(response.headers.get("x-request-id")).toBe("updates-status-0001");
+    expect(await response.json()).toEqual({
+      app: { version: "0.2.0" },
+      reachable: true,
+      updater: updaterStatus(),
+      error: null,
+    });
+    expect(updater.calls).toEqual([
+      { method: "GET", path: "/v1/status", body: null, authorization: `Bearer ${TOKEN}` },
+    ]);
   });
 
-  it("says when no updater answers", async () => {
+  it("starts an installation and switches the channel, and records both", async () => {
     const admin = await createUser("admin");
-    replies = [new TypeError("fetch failed")];
-    const response = await request("GET", "/api/v1/updates", { userId: admin.id });
-    expect(response).toEqual({
-      status: 200,
-      body: {
-        app: { version: null },
-        reachable: false,
-        updater: null,
-        error: "No update service answers at http://updater.test:8080.",
+    const installing = updaterStatus({
+      installing: {
+        version: "0.2.1",
+        startedAt: "2026-11-19T08:01:00.000Z",
+        manual: true,
+        stage: "requested",
       },
     });
+    updater.respond((call) => ({
+      status: call.path === "/v1/install" ? 202 : 200,
+      body: call.path === "/v1/install" ? installing : updaterStatus({ channel: "preview" }),
+    }));
 
-    process.env.UPDATER_URL = "";
-    resetConfigForTests();
-    calls.length = 0;
-    const off = await request("POST", "/api/v1/updates/check", { userId: admin.id, body: {} });
-    expect(off.status).toBe(200);
-    expect(off.body).toMatchObject({ reachable: false, updater: null });
-    expect(calls).toEqual([]);
-  });
-
-  it("checks on request", async () => {
-    const admin = await createUser("admin");
-    replies = [{ status: 200, body: STATUS }];
-    const response = await request("POST", "/api/v1/updates/check", { userId: admin.id, body: {} });
-    expect(response.status).toBe(200);
-    expect(response.body.updater).toEqual(STATUS);
-    expect(calls).toEqual([{ url: "http://updater.test:8080/v1/check", method: "POST", body: null }]);
-  });
-
-  it("starts an installation and records it", async () => {
-    const admin = await createUser("admin");
-    replies = [{ status: 202, body: INSTALLING }];
-    const response = await request("POST", "/api/v1/updates/install", {
-      userId: admin.id,
-      body: { version: "0.2.1", extra: "dropped" },
+    const { createApp } = await import("../http/app");
+    const install = await createApp().request("/api/v1/updates/install", {
+      method: "POST",
+      headers: {
+        origin: "http://localhost:3000",
+        "x-test-user": admin.id,
+        "x-request-id": "updates-install-0001",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ version: "0.2.1" }),
     });
-    expect(response.status).toBe(202);
-    expect(response.body).toMatchObject({ reachable: true, updater: INSTALLING, error: null });
-    expect(calls).toEqual([
-      { url: "http://updater.test:8080/v1/install", method: "POST", body: { version: "0.2.1" } },
-    ]);
-    const [entry] = await getDb().select().from(auditLog);
-    expect(entry).toMatchObject({ action: "updates.install", summary: "Started the installation of 0.2.1" });
-  });
-
-  it("validates the version and the channel before calling the updater", async () => {
-    const admin = await createUser("admin");
-    for (const version of [
-      "latest",
-      "0.2",
-      "0.2.1-rc.1",
-      "0.2.1\nversion=9.9.9",
-      "sha256:ABCDEF012345",
-      "",
-    ]) {
-      const response = await request("POST", "/api/v1/updates/install", {
-        userId: admin.id,
-        body: { version },
-      });
-      expect(response.status, version).toBe(422);
-      expect(response.body.error.fields).toHaveProperty("version");
-    }
+    expect(install.status).toBe(202);
+    expect(install.headers.get("x-request-id")).toBe("updates-install-0001");
+    expect(await install.json()).toMatchObject({ reachable: true, updater: installing, error: null });
     const channel = await request("POST", "/api/v1/updates/channel", {
       userId: admin.id,
-      body: { channel: "nightly" },
+      body: { channel: "preview" },
     });
-    expect(channel.status).toBe(422);
-    expect(calls).toEqual([]);
+    expect(channel.status).toBe(200);
 
-    replies = [
-      { status: 202, body: INSTALLING },
-      { status: 202, body: INSTALLING },
-    ];
-    for (const version of ["0.2.1-preview.3", "sha256:0123456789ab"]) {
-      expect(
-        (await request("POST", "/api/v1/updates/install", { userId: admin.id, body: { version } })).status,
-      ).toBe(202);
-    }
-  });
-
-  it("turns a refusal into 409 with the reason and the latest status", async () => {
-    const admin = await createUser("admin");
-    replies = [
-      { status: 409, body: { error: "0.2.1 is being installed." } },
-      { status: 200, body: INSTALLING },
-    ];
-    const response = await request("POST", "/api/v1/updates/install", {
-      userId: admin.id,
-      body: { version: "0.2.1" },
-    });
-    expect(response).toEqual({
-      status: 409,
-      body: {
-        app: { version: null },
-        reachable: true,
-        updater: INSTALLING,
-        error: "0.2.1 is being installed.",
-      },
-    });
-    expect(calls.map((call) => call.url)).toEqual([
-      "http://updater.test:8080/v1/install",
-      "http://updater.test:8080/v1/status",
+    expect(updater.calls).toEqual([
+      { method: "POST", path: "/v1/install", body: { version: "0.2.1" }, authorization: `Bearer ${TOKEN}` },
+      { method: "POST", path: "/v1/channel", body: { channel: "preview" }, authorization: `Bearer ${TOKEN}` },
     ]);
-    expect(await getDb().select().from(auditLog)).toEqual([]);
+    const entries = await getDb().select().from(auditLog).orderBy(auditLog.createdAt);
+    expect(entries.map(({ action, summary }) => ({ action, summary }))).toEqual([
+      { action: "updates.install", summary: "Started the installation of 0.2.1" },
+      { action: "updates.channel", summary: "Switched updates to the Preview channel" },
+    ]);
   });
 
-  it("passes an updater's 5xx on an installation through, with the reason and the latest status", async () => {
+  it("records nothing the updater did not take, and sends it no wrong version", async () => {
     const admin = await createUser("admin");
-    replies = [
-      { status: 503, body: { error: "The updater is busy. Try again in a minute." } },
-      { status: 200, body: STATUS },
-    ];
-    const response = await request("POST", "/api/v1/updates/install", {
+    const wrong = await request("POST", "/api/v1/updates/install", {
+      userId: admin.id,
+      body: { version: "0.2.1\nversion=9.9.9" },
+    });
+    expect(wrong.status).toBe(400);
+    expect(updater.calls).toEqual([]);
+
+    updater.respond((call) =>
+      call.path === "/v1/install"
+        ? { status: 409, body: { error: "0.2.1 is being installed." } }
+        : { body: updaterStatus() },
+    );
+    const refused = await request("POST", "/api/v1/updates/install", {
       userId: admin.id,
       body: { version: "0.2.1" },
-    });
-    expect(response).toEqual({
-      status: 503,
-      body: {
-        app: { version: null },
-        reachable: true,
-        updater: STATUS,
-        error: "The updater is busy. Try again in a minute.",
-      },
-    });
-    expect(await getDb().select().from(auditLog)).toEqual([]);
-
-    // Other routes keep answering a refusal as 409.
-    replies = [
-      { status: 503, body: { error: "The updater is busy. Try again in a minute." } },
-      { status: 200, body: STATUS },
-    ];
-    const check = await request("POST", "/api/v1/updates/check", { userId: admin.id, body: {} });
-    expect(check.status).toBe(409);
-  });
-
-  it("switches the channel, unless it is locked", async () => {
-    const admin = await createUser("admin");
-    const locked = "The platform's image tag latest decides which updates install. Change it there.";
-    replies = [
-      { status: 200, body: { ...STATUS, channel: "preview" } },
-      { status: 409, body: { error: locked } },
-      { status: 200, body: { ...STATUS, channelLocked: locked } },
-    ];
-    const switched = await request("POST", "/api/v1/updates/channel", {
-      userId: admin.id,
-      body: { channel: "preview" },
-    });
-    expect(switched.status).toBe(200);
-    expect(switched.body.updater.channel).toBe("preview");
-    expect(calls[0]).toEqual({
-      url: "http://updater.test:8080/v1/channel",
-      method: "POST",
-      body: { channel: "preview" },
-    });
-    const [entry] = await getDb().select().from(auditLog);
-    expect(entry?.summary).toBe("Switched updates to the Preview channel");
-
-    const refused = await request("POST", "/api/v1/updates/channel", {
-      userId: admin.id,
-      body: { channel: "stable" },
     });
     expect(refused.status).toBe(409);
-    expect(refused.body).toMatchObject({ error: locked, updater: { channelLocked: locked } });
+    expect(refused.body).toMatchObject({ reachable: true, error: "0.2.1 is being installed." });
+
+    // Without UPDATER_TOKEN, this updater refuses, and the answer says what to set.
+    delete process.env.UPDATER_TOKEN;
+    resetConfigForTests();
+    const tokenless = await request("POST", "/api/v1/updates/channel", {
+      userId: admin.id,
+      body: { channel: "preview" },
+    });
+    expect(tokenless.status).toBe(409);
+    expect(tokenless.body.error).toMatch(/UPDATER_TOKEN/);
+    expect(updater.calls.at(-2)).toMatchObject({ path: "/v1/channel", authorization: null });
+
+    // Without UPDATER_URL, the button is off and nothing is called.
+    process.env.UPDATER_URL = "";
+    resetConfigForTests();
+    updater.calls.length = 0;
+    const off = await request("POST", "/api/v1/updates/install", {
+      userId: admin.id,
+      body: { version: "0.2.1" },
+    });
+    expect(off).toMatchObject({ status: 200, body: { reachable: false, updater: null } });
+    expect(updater.calls).toEqual([]);
+
+    expect(await getDb().select().from(auditLog)).toEqual([]);
   });
 });

@@ -84,3 +84,29 @@ describe("UPDATER_URL", () => {
     expect(() => updaterUrl("file:///etc/passwd")).toThrow(/UPDATER_URL/);
   });
 });
+
+describe("UPDATER_TOKEN", () => {
+  afterEach(() => {
+    delete process.env.UPDATER_TOKEN;
+    resetConfigForTests();
+  });
+
+  const updaterToken = (value: string | undefined) => {
+    if (value === undefined) delete process.env.UPDATER_TOKEN;
+    else process.env.UPDATER_TOKEN = value;
+    resetConfigForTests();
+    return config().UPDATER_TOKEN;
+  };
+
+  it("is optional, and empty means none", () => {
+    expect(updaterToken(undefined)).toBeUndefined();
+    expect(updaterToken("")).toBeUndefined();
+    expect(updaterToken("  ")).toBeUndefined();
+    expect(updaterToken("0f1e2d3c4b5a69788796a5b4c3d2e1f0")).toBe("0f1e2d3c4b5a69788796a5b4c3d2e1f0");
+  });
+
+  it("takes only visible characters, so the header stays one value", () => {
+    expect(() => updaterToken("two words")).toThrow(/UPDATER_TOKEN/);
+    expect(() => updaterToken("line\nbreak")).toThrow(/UPDATER_TOKEN/);
+  });
+});
