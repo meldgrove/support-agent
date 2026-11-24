@@ -78,3 +78,14 @@ jobs:
       - run: docker build -t support-agent:ci .
       - name: The image runs as a non-root user
         run: test "$(docker run --rm --entrypoint id support-agent:ci -u)" = "1000"
+
+  compose-compat:
+    # A new image must still start with the compose files of the newest
+    # release (branch stable): servers keep those until their operator pulls.
+    name: Compose files of the newest release
+    permissions:
+      contents: read
+    uses: meldgrove/.github/.github/workflows/compose-compat.yml@401e2112820727724d7143307850eaeceac6d5f0 # v1.2.0
+    with:
+      version_variable: SUPPORT_AGENT_VERSION
+      env_file: .github/compose-compat.env
