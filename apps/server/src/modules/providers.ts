@@ -6,7 +6,10 @@ import {
   providerTestInputSchema,
   providerUpdateSchema,
   type Provider,
+  type ProviderCreate,
   type ProviderKind,
+  type ProviderModels,
+  type ProviderUpdate,
 } from "@support-agent/shared/api/providers";
 import type { CheckResult } from "@support-agent/shared/api/common";
 import { getDb, type DbOrTx } from "../db/client";
@@ -14,8 +17,9 @@ import { agents, providers } from "../db/schema";
 import { encryptSecret, secretHint } from "../core/crypto";
 import { audit } from "../core/audit";
 import { notifyConfigChanged } from "../core/config-events";
+import type { Actor } from "../auth/principal";
 import type { AppEnv } from "../http/env";
-import { conflict, notFound } from "../http/errors";
+import { AppError, conflict, notFound } from "../http/errors";
 import { idParam, jsonBody, requireAdmin, requireUser } from "../http/middleware";
 import { providerConnection } from "../agent/runtime";
 import { generateJson, llmClient, LlmError } from "../llm";
@@ -53,21 +57,28 @@ async function load(db: DbOrTx, id: string): Promise<Row> {
   return row;
 }
 
-const router = new Hono<AppEnv>();
+// ---------------------------------------------------------------------------
+// Service: the admin page's routes and `cli settings … providers` call these.
+// ---------------------------------------------------------------------------
 
-router.get("/providers", async (c) => {
-  requireUser(c);
+/** Every provider, as admins see it on the Providers page. */
+export async function listProviders(): Promise<Provider[]> {
   const db = getDb();
   const [rows, counts] = await Promise.all([
     db.select().from(providers).orderBy(asc(providers.name)),
     agentCounts(db),
   ]);
-  return c.json({ items: rows.map((row) => toProvider(row, counts.get(row.id) ?? 0)) });
-});
+  return rows.map((row) => toProvider(row, counts.get(row.id) ?? 0));
+}
 
-router.post("/providers", async (c) => {
-  const actor = requireAdmin(c);
-  const input = await jsonBody(c, providerCreateSchema);
+export async function readProvider(id: string): Promise<Provider> {
+  const db = getDb();
+  const row = await load(db, id);
+  const counts = await agentCounts(db);
+  return toProvider(row, counts.get(id) ?? 0);
+}
+
+export async function createProvider(actor: Actor, input: ProviderCreate): Promise<Provider> {
   const row = await getDb().transaction(async (tx) => {
     const [created] = await tx
       .insert(providers)
@@ -87,13 +98,10 @@ router.post("/providers", async (c) => {
     });
     return created!;
   });
-  return c.json(toProvider(row, 0), 201);
-});
+  return toProvider(row, 0);
+}
 
-router.patch("/providers/:id", async (c) => {
-  const actor = requireAdmin(c);
-  const id = idParam(c);
-  const input = await jsonBody(c, providerUpdateSchema);
+export async function updateProvider(actor: Actor, id: string, input: ProviderUpdate): Promise<Provider> {
   const db = getDb();
   const row = await db.transaction(async (tx) => {
     const current = await load(tx, id);
@@ -121,12 +129,10 @@ router.patch("/providers/:id", async (c) => {
     return updated!;
   });
   const counts = await agentCounts(db);
-  return c.json(toProvider(row, counts.get(id) ?? 0));
-});
+  return toProvider(row, counts.get(id) ?? 0);
+}
 
-router.delete("/providers/:id", async (c) => {
-  const actor = requireAdmin(c);
-  const id = idParam(c);
+export async function deleteProvider(actor: Actor, id: string): Promise<void> {
   await getDb().transaction(async (tx) => {
     const current = await load(tx, id);
     const [used] = await tx
@@ -144,28 +150,26 @@ router.delete("/providers/:id", async (c) => {
       summary: `Deleted provider "${current.name}"`,
     });
   });
-  return c.json({ ok: true });
-});
+}
 
-router.get("/providers/:id/models", async (c) => {
-  requireUser(c);
-  const row = await load(getDb(), idParam(c));
+/** The models the provider lists; a 502 with the provider's problem when it lists none. */
+export async function listProviderModels(id: string): Promise<ProviderModels> {
+  const row = await load(getDb(), id);
   try {
-    const models = await llmClient(providerConnection(row)).listModels();
-    return c.json({ models });
+    return { models: await llmClient(providerConnection(row)).listModels() };
   } catch (error) {
     // Not every compatible API lists its models; people can type the name instead.
     const message = error instanceof LlmError ? error.message : "Could not list the models";
-    return c.json({ error: { code: "provider_error", message } }, 502);
+    throw new AppError(502, "provider_error", message);
   }
-});
+}
 
-router.post("/providers/:id/test", async (c) => {
-  requireAdmin(c);
-  const row = await load(getDb(), idParam(c));
-  const { model } = await jsonBody(c, providerTestInputSchema);
+/** The provider as stored, for its test (404 when it is gone). */
+export const loadProvider = (id: string) => load(getDb(), id);
+
+/** The page's test button: one small model call. */
+export async function testProvider(row: Row, model: string): Promise<CheckResult> {
   const started = performance.now();
-  let result: CheckResult;
   try {
     const reply = await generateJson(
       llmClient(providerConnection(row)),
@@ -183,19 +187,64 @@ router.post("/providers/:id/test", async (c) => {
       },
       z.object({ ok: z.boolean() }),
     );
-    result = {
+    return {
       ok: true,
       message: `The model answered (${reply.inputTokens + reply.outputTokens} tokens)`,
       latencyMs: Math.round(performance.now() - started),
     };
   } catch (error) {
-    result = {
+    return {
       ok: false,
       message: error instanceof LlmError ? error.message : "The model call failed",
       latencyMs: Math.round(performance.now() - started),
     };
   }
-  return c.json(result);
+}
+
+// ---------------------------------------------------------------------------
+// Routes
+// ---------------------------------------------------------------------------
+
+const router = new Hono<AppEnv>();
+
+/** Editors read the list for the agent form; only admins see the hints of the keys. */
+router.get("/providers", async (c) => {
+  const principal = requireUser(c);
+  const items = await listProviders();
+  return c.json({
+    items: principal.role === "admin" ? items : items.map((item) => ({ ...item, apiKeyHint: null })),
+  });
+});
+
+router.post("/providers", async (c) => {
+  const actor = requireAdmin(c);
+  const input = await jsonBody(c, providerCreateSchema);
+  return c.json(await createProvider(actor, input), 201);
+});
+
+router.patch("/providers/:id", async (c) => {
+  const actor = requireAdmin(c);
+  const id = idParam(c);
+  const input = await jsonBody(c, providerUpdateSchema);
+  return c.json(await updateProvider(actor, id, input));
+});
+
+router.delete("/providers/:id", async (c) => {
+  const actor = requireAdmin(c);
+  await deleteProvider(actor, idParam(c));
+  return c.json({ ok: true });
+});
+
+router.get("/providers/:id/models", async (c) => {
+  requireUser(c);
+  return c.json(await listProviderModels(idParam(c)));
+});
+
+router.post("/providers/:id/test", async (c) => {
+  requireAdmin(c);
+  const row = await loadProvider(idParam(c));
+  const { model } = await jsonBody(c, providerTestInputSchema);
+  return c.json(await testProvider(row, model));
 });
 
 export default router;

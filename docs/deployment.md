@@ -1,12 +1,13 @@
 # Deployment
 
 For the person who runs the support agent on a Linux server, such as a VPS
-with Debian or Ubuntu: requirements, [setup](#setup), sign-in, upgrades,
-automatic updates, backups and troubleshooting. To run it on Coolify
-instead, see [Coolify](coolify.md). Every environment
-variable is described in [Configuration](configuration.md); setting up
-Slack, models and agents happens afterwards in the admin interface
-([Admin guide](admin-guide.md)).
+with Debian or Ubuntu: requirements, [setup](#setup),
+[settings from the command line](#settings-from-the-command-line), sign-in,
+upgrades, automatic updates, backups and troubleshooting. To run it on
+Coolify instead, see [Coolify](coolify.md). Every environment variable is
+described in [Configuration](configuration.md); setting up Slack, models and
+agents happens afterwards in the admin interface
+([Admin guide](admin-guide.md)) or on the server with `cli settings`.
 
 ## Requirements
 
@@ -35,7 +36,7 @@ preview too: `0.1.1-preview.3` (three changes after 0.1.0) and `preview`.
 
 | File                    | Contains                                                                                            |
 | ----------------------- | --------------------------------------------------------------------------------------------------- |
-| `Dockerfile`            | The image. Its command (`all`, `web`, `bot`, `migrate`) picks the role.                             |
+| `Dockerfile`            | The image. Its command (`all`, `web`, `bot`, `migrate`, `cli`) picks the role.                      |
 | `compose.yaml`          | A one-off `migrate`, the admin interface (`web`), the Slack bot (`bot`) and the optional `updater`. |
 | `compose.postgres.yaml` | Adds a PostgreSQL 18 container, for servers without a database of their own.                        |
 | `compose.coolify.yaml`  | The same as `compose.yaml`, for [Coolify](coolify.md).                                              |
@@ -101,8 +102,178 @@ run the commands as root (`sudo -i`).
 
 7. Open `APP_URL` and sign in with an address from `ADMIN_EMAILS`.
 8. **Continue in the admin interface:** the overview page lists the steps
-   (Slack, a provider, a knowledge source, an agent).
+   (Slack, a provider, a knowledge source, an agent). They can also be
+   taken on the server instead:
+   [Settings from the command line](#settings-from-the-command-line).
 9. **Automatic updates:** [set them up](#setup-on-the-server).
+
+## Settings from the command line
+
+What admins set in the admin interface (providers, knowledge sources,
+Slack, agents and the Settings page) can also be set on the server, without
+a browser, with `cli settings`. It runs the same code as the pages: the same
+checks, the same encryption, the same reload of the bot, and an entry in the
+audit log with the actor `operator` and the command. In `/srv/support-agent`:
+
+```sh
+docker compose run --rm -T migrate cli settings list
+```
+
+In a running container, such as a terminal on Coolify, the command is just
+`cli …` (`docker compose exec web cli settings list`).
+
+| Command                                                        | What it does                                                                                   |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `cli settings list [--json]`                                   | Each setting and each entry of a list with its ID: `set`, `not set` or `incomplete`, and hints |
+| `cli settings show <name> [--id <id>]`                         | The setting, a whole list or one entry as JSON, as the page reads it: keys only as hints       |
+| `cli settings apply <name>`                                    | Saves the JSON body on stdin, as the page's **Save** does; for a list, adds an entry           |
+| `cli settings apply <name> --id <id>`                          | Saves the body of the entry's edit form                                                        |
+| `cli settings remove <name> --id <id>`                         | Deletes an entry, as the page's **Delete** does                                                |
+| `cli settings test providers --id <id> --model <model>`        | The provider's **Test**: a short call to the model                                             |
+| `cli settings test knowledge-sources --id <id> --query <text>` | The source's **Test**: a search                                                                |
+| `cli settings test slack`                                      | **Check connection**                                                                           |
+| `cli settings show providers --id <id> --models`               | The models the provider lists                                                                  |
+| `cli settings show slack --channels`                           | The channels the bot can see, with their IDs                                                   |
+| `cli settings show slack --manifest [--name <app name>]`       | The manifest for a new Slack app                                                               |
+| `cli help`                                                     | The commands and the setting names                                                             |
+
+The settings: `providers`, `knowledge-sources` and `agents` are lists;
+`slack` and `app` (the **Settings** page) exist once.
+
+- Secrets go only in the body on stdin, never in an argument (arguments show
+  in `ps` and the shell history). Nothing prints a saved key or token.
+- `apply` without `--id` adds an entry: it prints `Created. ID: …` on stderr
+  and the new entry as JSON on stdout.
+- For `providers`, `knowledge-sources` and `slack`, fields left out of the
+  body stay as they are, as on the page; a key or token in the body
+  replaces the saved one. `agents` and `app` take the whole body, as the page
+  sends it: start from what `show` prints. An agent's body also needs the
+  `version` that `show` printed; when the agent changed in between, the
+  command refuses, as the page does.
+- Exit codes: `0` done; `1` refused, with the page's message and the field
+  on stderr (a failed test prints its result too); `2` a wrong command or a
+  body that is not JSON.
+- The support agent issues no tokens for other apps, so there is no
+  `cli tokens`. Users stay on the **Users** page.
+
+The bodies, as the pages send them:
+
+`providers`, a new provider (`kind`: `anthropic`, `openai`, `mistral` or
+`openai_compatible`; the last one needs a `baseUrl`, and its `apiKey` is
+optional):
+
+```json
+{ "name": "Anthropic", "kind": "anthropic", "apiKey": "<API key>" }
+```
+
+`providers --id <id>`, a new key for a provider (or a new `name` or
+`baseUrl`):
+
+```json
+{ "apiKey": "<API key>" }
+```
+
+`knowledge-sources`, a search API with a bearer token (`auth`: `none`,
+`bearer` or `oauth2_client_credentials` with `tokenUrl`, `clientId` and
+`scope`; `secret` is the token or the client secret). The fields of
+`config` are described in [Knowledge sources](knowledge-sources.md).
+
+```json
+{
+  "name": "IT handbook",
+  "description": "Public IT articles",
+  "kind": "search_api",
+  "config": {
+    "url": "https://search.example.org/search",
+    "auth": "bearer",
+    "tokenUrl": null,
+    "clientId": null,
+    "scope": null,
+    "bodyTemplate": "{\"query\": \"{{query}}\", \"limit\": \"{{limit}}\"}",
+    "resultsPath": "results",
+    "titlePath": "title",
+    "urlPath": "url",
+    "textPath": "text",
+    "sectionPath": null,
+    "maxResults": 6
+  },
+  "secret": "<bearer token>"
+}
+```
+
+`slack`: the bot token (`xoxb-…`), the app-level token (`xapp-…`) and the
+optional alert channel, an ID from `cli settings show slack --channels`
+(`null` turns the alerts off). Create the Slack app with the manifest of
+`cli settings show slack --manifest` first ([Admin guide](admin-guide.md#1-connect-slack)).
+
+```json
+{ "botToken": "<bot token>", "appToken": "<app-level token>", "alertChannelId": "C0123456789" }
+```
+
+`agents`, a new agent: the provider's and the sources' IDs from
+`cli settings list`, and Slack channel IDs. With `"enabled": true`, it
+needs a provider, a model and a channel.
+
+```json
+{
+  "name": "IT support",
+  "enabled": true,
+  "instructions": "You are the IT support assistant of our organization in this Slack channel.",
+  "providerId": "<provider ID>",
+  "model": "claude-sonnet-5-5",
+  "fallbackProviderId": null,
+  "fallbackModel": null,
+  "replyMode": "questions",
+  "followUpsInThreads": true,
+  "noAnswerMode": "escalate",
+  "escalationMessage": "I don't know. Please ask the IT team in #it.",
+  "headlineThreads": false,
+  "headlineMessage": "",
+  "displayName": null,
+  "iconUrl": null,
+  "readImages": true,
+  "channels": ["C0123456789"],
+  "knowledgeSourceIds": ["<knowledge source ID>"]
+}
+```
+
+To change an agent, start from what `show` prints: it keeps the `version`,
+and `jq` turns the channels, which `show` prints with their names, back into
+IDs:
+
+```sh
+docker compose run --rm -T migrate cli settings show agents --id <id> \
+  | jq '.channels |= map(.id) | .enabled = false' \
+  | docker compose run --rm -T migrate cli settings apply agents --id <id>
+```
+
+`app`, the **Settings** page (`retentionDays`: `0` keeps no texts;
+`workingReaction`: an emoji name, or `null`):
+
+```json
+{
+  "retentionDays": 90,
+  "errorMessage": "Sorry, I can't answer right now. Someone from the team will get back to you.",
+  "workingReaction": "eyes"
+}
+```
+
+Then test it: `cli settings test slack`,
+`cli settings test providers --id <id> --model claude-sonnet-5-5`, or
+`cli settings test knowledge-sources --id <id> --query "reset my password"`.
+Agent tests and the test console stay in the admin interface.
+
+An AI with access to the server sets a key this way: it receives the secret
+as a file, pipes the body into `cli settings apply`, runs
+`cli settings test` and deletes the file. With `jq`, the secret never
+appears in an argument:
+
+```sh
+jq -n --rawfile key anthropic-key '{name: "Anthropic", kind: "anthropic", apiKey: ($key | rtrimstr("\n"))}' \
+  | docker compose run --rm -T migrate cli settings apply providers
+docker compose run --rm -T migrate cli settings test providers --id <id> --model claude-sonnet-5-5
+rm anthropic-key
+```
 
 ## Sign-in
 

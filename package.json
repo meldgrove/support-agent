@@ -25,7 +25,8 @@
     "test": "npm run test --workspaces --if-present",
     "test:integration": "npm run test:integration --workspace @support-agent/server",
     "db:generate": "npm run db:generate --workspace @support-agent/server",
-    "db:migrate": "npm run db:migrate --workspace @support-agent/server"
+    "db:migrate": "npm run db:migrate --workspace @support-agent/server",
+    "cli": "npm run --silent cli --workspace @support-agent/server --"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

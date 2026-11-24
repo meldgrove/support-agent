@@ -110,3 +110,24 @@ describe("UPDATER_TOKEN", () => {
     expect(() => updaterToken("line\nbreak")).toThrow(/UPDATER_TOKEN/);
   });
 });
+
+describe("the configuration's problems", () => {
+  afterEach(() => {
+    if (savedAdmins === undefined) delete process.env.ADMIN_EMAILS;
+    else process.env.ADMIN_EMAILS = savedAdmins;
+    resetConfigForTests();
+  });
+  const savedAdmins = process.env.ADMIN_EMAILS;
+
+  it("name the variable, never its value (the operator command prints them)", () => {
+    process.env.ADMIN_EMAILS = "ada@example.org, xoxb-pasted-by-mistake-41c7";
+    resetConfigForTests();
+    let message = "";
+    try {
+      config();
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toBe("Invalid configuration:\n  ADMIN_EMAILS: Each entry must be an email address");
+  });
+});

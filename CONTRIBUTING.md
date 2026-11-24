@@ -24,6 +24,9 @@ with `APP_ROLE=all`, so the Slack bot runs too. It stays idle until you
 connect a Slack app in the admin interface; use a test workspace and a
 separate Slack app for development.
 
+`npm run cli -- settings list` runs the operator command against the
+development database (`cli help` lists the commands).
+
 ## Checks
 
 ```sh

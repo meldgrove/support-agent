@@ -78,6 +78,10 @@ jobs:
       - run: docker build -t support-agent:ci .
       - name: The image runs as a non-root user
         run: test "$(docker run --rm --entrypoint id support-agent:ci -u)" = "1000"
+      - name: The image has the operator command
+        run: |
+          docker run --rm support-agent:ci cli help | grep -q "cli settings apply"
+          docker run --rm --entrypoint cli support-agent:ci help | grep -q "cli settings apply"
 
   compose-compat:
     # A new image must still start with the compose files of the newest

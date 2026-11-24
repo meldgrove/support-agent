@@ -1,6 +1,7 @@
-// Bundles the server into dist/main.mjs. npm dependencies stay external (they
-// are installed in the image); the workspace package (@support-agent/shared) and
-// the imported devDependency @sentry/node are bundled.
+// Bundles the server into dist/main.mjs, and the operator command into
+// dist/cli.mjs; code both use goes into dist/chunks/. npm dependencies stay
+// external (they are installed in the image); the workspace package
+// (@support-agent/shared) and the imported devDependency @sentry/node are bundled.
 // @meldgrove/ui/updates/server (the update routes) is bundled too: @meldgrove/ui
 // is a root devDependency, so the image's production install leaves out the
 // package and its React peers.
@@ -14,8 +15,12 @@ const external = Object.keys(pkg.dependencies).filter((name) => !name.startsWith
 
 await rm(path.join(root, "dist"), { recursive: true, force: true });
 await build({
-  entryPoints: [path.join(root, "src/main.ts")],
-  outfile: path.join(root, "dist/main.mjs"),
+  entryPoints: { main: path.join(root, "src/main.ts"), cli: path.join(root, "src/cli.ts") },
+  outdir: path.join(root, "dist"),
+  outExtension: { ".js": ".mjs" },
+  // One copy of the code both entry points use.
+  splitting: true,
+  chunkNames: "chunks/[name]-[hash]",
   bundle: true,
   platform: "node",
   format: "esm",

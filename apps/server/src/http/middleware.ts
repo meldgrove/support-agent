@@ -8,6 +8,7 @@ import type { UserPrincipal } from "../auth/principal";
 import { logger } from "../logger";
 import type { AppEnv } from "./env";
 import { AppError, badRequest, forbidden, parseWith, unauthorized } from "./errors";
+import { entityId, parseJsonBody } from "./json";
 
 export const requestId: MiddlewareHandler<AppEnv> = async (c, next) => {
   const incoming = c.req.header("x-request-id");
@@ -68,13 +69,13 @@ export function requireAdmin(c: Context<AppEnv>): UserPrincipal {
 
 /** The JSON body validated with a shared schema. */
 export async function jsonBody<T extends z.ZodType>(c: Context<AppEnv>, schema: T): Promise<z.infer<T>> {
-  let body: unknown;
+  let text: string;
   try {
-    body = await c.req.json();
+    text = await c.req.text();
   } catch {
     throw badRequest("The request body must be JSON");
   }
-  return parseWith(schema, body);
+  return parseJsonBody(text, schema);
 }
 
 export function queryOf<T extends z.ZodType>(c: Context<AppEnv>, schema: T): z.infer<T> {
@@ -83,9 +84,5 @@ export function queryOf<T extends z.ZodType>(c: Context<AppEnv>, schema: T): z.i
 
 /** A route parameter that must be a UUID (404 otherwise, like an unknown id). */
 export function idParam(c: Context<AppEnv>, name = "id"): string {
-  const value = c.req.param(name) ?? "";
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
-    throw new AppError(404, "not_found", "Not found");
-  }
-  return value.toLowerCase();
+  return entityId(c.req.param(name));
 }

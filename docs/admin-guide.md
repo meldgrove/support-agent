@@ -4,6 +4,11 @@ How to set up and run agents in the admin interface. The overview page shows
 the bot's state, the setup steps still open, the last 24 hours and recent
 errors.
 
+Providers, knowledge sources, Slack, agents and the settings can also be set
+on the server, without a browser
+([Settings from the command line](deployment.md#settings-from-the-command-line)).
+The audit log shows those changes with the actor `operator` and the command.
+
 ## Roles
 
 | Role   | Can                                                                                                   |

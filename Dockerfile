@@ -3,6 +3,7 @@
 #   web      admin interface only (port 3000)
 #   bot      Slack bot only
 #   migrate  apply database migrations, then exit
+#   cli …    the operator command, e.g. `cli settings list` (docs/deployment.md)
 
 FROM node:26.13.1-bookworm-slim AS base
 WORKDIR /app
@@ -45,6 +46,10 @@ COPY --from=build --chown=node:node /app/apps/server/dist ./apps/server/dist
 COPY --from=build --chown=node:node /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build --chown=node:node /app/apps/web/dist ./apps/web/dist
 COPY --chown=node:node docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# `cli …` in a terminal of a running container, e.g. on Coolify or with
+# `docker compose exec web cli settings list`.
+RUN printf '#!/bin/sh\nexec docker-entrypoint.sh cli "$@"\n' > /usr/local/bin/cli \
+    && chmod 755 /usr/local/bin/cli
 # The release workflow sets the version; images built from source have none.
 ARG APP_VERSION=""
 ENV APP_VERSION=${APP_VERSION}

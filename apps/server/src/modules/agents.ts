@@ -8,6 +8,7 @@ import {
   type Agent,
   type AgentInput,
   type AgentTest,
+  type AgentUpdate,
   type NoAnswerMode,
   type Outcome,
   type PreviewResult,
@@ -25,6 +26,7 @@ import {
 import { audit } from "../core/audit";
 import { notifyConfigChanged } from "../core/config-events";
 import { getAppSettings } from "../core/settings";
+import type { Actor } from "../auth/principal";
 import type { AppEnv } from "../http/env";
 import { AppError, conflict, notFound, validationError } from "../http/errors";
 import { idParam, jsonBody, requireUser } from "../http/middleware";
@@ -79,7 +81,7 @@ async function toAgents(db: DbOrTx, rows: Row[]): Promise<Agent[]> {
   }));
 }
 
-async function loadAgent(db: DbOrTx, id: string): Promise<Agent> {
+export async function loadAgent(db: DbOrTx, id: string): Promise<Agent> {
   const rows = await db.select().from(agents).where(eq(agents.id, id));
   const [agent] = await toAgents(db, rows);
   if (!agent) throw notFound("Agent not found");
@@ -188,6 +190,83 @@ function columns(input: AgentInput) {
     iconUrl: input.iconUrl,
     readImages: input.readImages,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Service: the agent page's routes and `cli settings … agents` call these.
+// ---------------------------------------------------------------------------
+
+export async function listAgents(): Promise<Agent[]> {
+  const db = getDb();
+  const rows = await db.select().from(agents).orderBy(asc(agents.name));
+  return toAgents(db, rows);
+}
+
+export async function createAgent(actor: Actor, input: AgentInput): Promise<Agent> {
+  const db = getDb();
+  const names = await lookUpChannelNames(db, input.channels);
+  const id = await db.transaction(async (tx) => {
+    await checkReferences(tx, input, null);
+    const [created] = await tx.insert(agents).values(columns(input)).returning({ id: agents.id });
+    await writeLinks(tx, created!.id, input, names);
+    await audit(tx, actor, {
+      action: "agent.created",
+      entityType: "agent",
+      entityId: created!.id,
+      summary: `Created agent "${input.name}"`,
+    });
+    await notifyConfigChanged(tx);
+    return created!.id;
+  });
+  return loadAgent(db, id);
+}
+
+/** Saves the agent page; `input.version` must be the version it was read at. */
+export async function updateAgent(actor: Actor, id: string, input: AgentUpdate): Promise<Agent> {
+  const db = getDb();
+  const names = await lookUpChannelNames(db, input.channels);
+  await db.transaction(async (tx) => {
+    // The row lock makes simultaneous saves of the same version wait here and
+    // then see the new version, so only the first one goes through.
+    const [current] = await tx
+      .select({ version: agents.version })
+      .from(agents)
+      .where(eq(agents.id, id))
+      .for("update");
+    if (!current) throw notFound("Agent not found");
+    if (current.version !== input.version) {
+      throw conflict("Someone else changed this agent. Reload to see the changes.", "version_conflict");
+    }
+    await checkReferences(tx, input, id);
+    await tx
+      .update(agents)
+      .set({ ...columns(input), version: current.version + 1, updatedAt: new Date() })
+      .where(eq(agents.id, id));
+    await writeLinks(tx, id, input, names);
+    await audit(tx, actor, {
+      action: "agent.updated",
+      entityType: "agent",
+      entityId: id,
+      summary: `Changed agent "${input.name}"`,
+    });
+    await notifyConfigChanged(tx);
+  });
+  return loadAgent(db, id);
+}
+
+export async function deleteAgent(actor: Actor, id: string): Promise<void> {
+  await getDb().transaction(async (tx) => {
+    const [current] = await tx.select({ name: agents.name }).from(agents).where(eq(agents.id, id));
+    if (!current) throw notFound("Agent not found");
+    await tx.delete(agents).where(eq(agents.id, id));
+    await audit(tx, actor, {
+      action: "agent.deleted",
+      entityType: "agent",
+      entityId: id,
+      summary: `Deleted agent "${current.name}"`,
+    });
+    await notifyConfigChanged(tx);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -345,30 +424,13 @@ const router = new Hono<AppEnv>();
 
 router.get("/agents", async (c) => {
   requireUser(c);
-  const db = getDb();
-  const rows = await db.select().from(agents).orderBy(asc(agents.name));
-  return c.json({ items: await toAgents(db, rows) });
+  return c.json({ items: await listAgents() });
 });
 
 router.post("/agents", async (c) => {
   const actor = requireUser(c);
   const input = await jsonBody(c, agentInputSchema);
-  const db = getDb();
-  const names = await lookUpChannelNames(db, input.channels);
-  const id = await db.transaction(async (tx) => {
-    await checkReferences(tx, input, null);
-    const [created] = await tx.insert(agents).values(columns(input)).returning({ id: agents.id });
-    await writeLinks(tx, created!.id, input, names);
-    await audit(tx, actor, {
-      action: "agent.created",
-      entityType: "agent",
-      entityId: created!.id,
-      summary: `Created agent "${input.name}"`,
-    });
-    await notifyConfigChanged(tx);
-    return created!.id;
-  });
-  return c.json(await loadAgent(db, id), 201);
+  return c.json(await createAgent(actor, input), 201);
 });
 
 router.post("/agents/preview", async (c) => {
@@ -385,52 +447,12 @@ router.put("/agents/:id", async (c) => {
   const actor = requireUser(c);
   const id = idParam(c);
   const input = await jsonBody(c, agentUpdateSchema);
-  const db = getDb();
-  const names = await lookUpChannelNames(db, input.channels);
-  await db.transaction(async (tx) => {
-    // The row lock makes simultaneous saves of the same version wait here and
-    // then see the new version, so only the first one goes through.
-    const [current] = await tx
-      .select({ version: agents.version })
-      .from(agents)
-      .where(eq(agents.id, id))
-      .for("update");
-    if (!current) throw notFound("Agent not found");
-    if (current.version !== input.version) {
-      throw conflict("Someone else changed this agent. Reload to see the changes.", "version_conflict");
-    }
-    await checkReferences(tx, input, id);
-    await tx
-      .update(agents)
-      .set({ ...columns(input), version: current.version + 1, updatedAt: new Date() })
-      .where(eq(agents.id, id));
-    await writeLinks(tx, id, input, names);
-    await audit(tx, actor, {
-      action: "agent.updated",
-      entityType: "agent",
-      entityId: id,
-      summary: `Changed agent "${input.name}"`,
-    });
-    await notifyConfigChanged(tx);
-  });
-  return c.json(await loadAgent(db, id));
+  return c.json(await updateAgent(actor, id, input));
 });
 
 router.delete("/agents/:id", async (c) => {
   const actor = requireUser(c);
-  const id = idParam(c);
-  await getDb().transaction(async (tx) => {
-    const [current] = await tx.select({ name: agents.name }).from(agents).where(eq(agents.id, id));
-    if (!current) throw notFound("Agent not found");
-    await tx.delete(agents).where(eq(agents.id, id));
-    await audit(tx, actor, {
-      action: "agent.deleted",
-      entityType: "agent",
-      entityId: id,
-      summary: `Deleted agent "${current.name}"`,
-    });
-    await notifyConfigChanged(tx);
-  });
+  await deleteAgent(actor, idParam(c));
   return c.json({ ok: true });
 });
 

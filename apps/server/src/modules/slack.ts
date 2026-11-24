@@ -7,6 +7,7 @@ import {
   type SlackChannels,
   type SlackCheckResult,
   type SlackSettings,
+  type SlackSettingsUpdate,
 } from "@support-agent/shared/api/slack";
 import { getDb } from "../db/client";
 import { agentChannels } from "../db/schema";
@@ -14,6 +15,7 @@ import { decryptSecret, encryptSecret, secretHint } from "../core/crypto";
 import { audit } from "../core/audit";
 import { notifyConfigChanged } from "../core/config-events";
 import { getStoredSlack, putStoredSlack, type StoredSlack } from "../core/settings";
+import type { Actor } from "../auth/principal";
 import type { AppEnv } from "../http/env";
 import { AppError } from "../http/errors";
 import { jsonBody, queryOf, requireAdmin, requireUser } from "../http/middleware";
@@ -36,18 +38,16 @@ function toSettings(stored: StoredSlack): SlackSettings {
   };
 }
 
-const router = new Hono<AppEnv>();
+// ---------------------------------------------------------------------------
+// Service: the admin page's routes and `cli settings … slack` call these.
+// ---------------------------------------------------------------------------
 
-router.get("/slack", async (c) => {
-  requireAdmin(c);
-  return c.json(toSettings(await getStoredSlack(getDb())));
-});
+export async function readSlack(): Promise<SlackSettings> {
+  return toSettings(await getStoredSlack(getDb()));
+}
 
-router.patch("/slack", async (c) => {
-  const actor = requireAdmin(c);
-  const input = await jsonBody(c, slackSettingsUpdateSchema);
-  const db = getDb();
-  const stored = await db.transaction(async (tx) => {
+export async function saveSlack(actor: Actor, input: SlackSettingsUpdate): Promise<SlackSettings> {
+  const stored = await getDb().transaction(async (tx) => {
     const current = await getStoredSlack(tx);
     const next: StoredSlack = { ...current };
     const changed: string[] = [];
@@ -83,15 +83,15 @@ router.patch("/slack", async (c) => {
     await notifyConfigChanged(tx);
     return next;
   });
-  return c.json(toSettings(stored));
-});
+  return toSettings(stored);
+}
 
-router.post("/slack/check", async (c) => {
-  requireAdmin(c);
+/** The page's check: both tokens, and the workspace details it stores. */
+export async function checkSlack(): Promise<SlackCheckResult> {
   const db = getDb();
   const stored = await getStoredSlack(db);
   if (!stored.botTokenEncrypted) {
-    const result: SlackCheckResult = {
+    return {
       ok: false,
       message: "Enter the bot token first",
       latencyMs: null,
@@ -100,7 +100,6 @@ router.post("/slack/check", async (c) => {
       missingScopes: [],
       missingOptionalScopes: [],
     };
-    return c.json(result);
   }
   const started = performance.now();
   const check = await checkSlackTokens(
@@ -122,7 +121,7 @@ router.post("/slack/check", async (c) => {
       await notifyConfigChanged(tx);
     });
   }
-  const result: SlackCheckResult = {
+  return {
     ok: check.ok,
     message: check.message,
     latencyMs: Math.round(performance.now() - started),
@@ -131,12 +130,10 @@ router.post("/slack/check", async (c) => {
     missingScopes: check.missingScopes,
     missingOptionalScopes: check.missingOptionalScopes,
   };
-  return c.json(result);
-});
+}
 
 /** Channels the bot can see, for the channel picker. */
-router.get("/slack/channels", async (c) => {
-  requireUser(c);
+export async function listSlackChannels(): Promise<SlackChannels> {
   const db = getDb();
   const stored = await getStoredSlack(db);
   if (!stored.botTokenEncrypted) {
@@ -176,14 +173,45 @@ router.get("/slack/channels", async (c) => {
     throw new AppError(502, "slack_error", "Could not load the channels from Slack. Check the connection.");
   }
   channels.sort((a, b) => a.name.localeCompare(b.name));
-  const body: SlackChannels = { channels, botName: stored.botName };
-  return c.json(body);
+  return { channels, botName: stored.botName };
+}
+
+/** The Slack app manifest to create the app with, under `name` or the app's name. */
+export function slackAppManifest(name: string | null | undefined) {
+  return { manifest: slackManifest(name ?? config().APP_NAME) };
+}
+
+// ---------------------------------------------------------------------------
+// Routes
+// ---------------------------------------------------------------------------
+
+const router = new Hono<AppEnv>();
+
+router.get("/slack", async (c) => {
+  requireAdmin(c);
+  return c.json(await readSlack());
+});
+
+router.patch("/slack", async (c) => {
+  const actor = requireAdmin(c);
+  const input = await jsonBody(c, slackSettingsUpdateSchema);
+  return c.json(await saveSlack(actor, input));
+});
+
+router.post("/slack/check", async (c) => {
+  requireAdmin(c);
+  return c.json(await checkSlack());
+});
+
+router.get("/slack/channels", async (c) => {
+  requireUser(c);
+  return c.json(await listSlackChannels());
 });
 
 router.get("/slack/manifest", (c) => {
   requireAdmin(c);
   const { name } = queryOf(c, slackManifestQuerySchema);
-  return c.json({ manifest: slackManifest(name ?? config().APP_NAME) });
+  return c.json(slackAppManifest(name));
 });
 
 export default router;

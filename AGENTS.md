@@ -21,13 +21,15 @@ npm workspaces, Node.js 26, strict TypeScript.
 - `packages/shared` (`@support-agent/shared/*`): zod schemas of the API
   (`api/*.ts`), roles, error report redaction. Both apps use them.
 
-One Docker image runs every process: `APP_ROLE` = `all | web | bot | migrate`.
+One Docker image runs every process: `APP_ROLE` = `all | web | bot | migrate`;
+its command `cli …` runs the operator command (`cli settings`).
 
 ## Layout
 
 ```
 apps/server/src/
   main.ts          entry; APP_ROLE selects the processes
+  cli.ts           entry of the operator command; cli/ has one module per setting name
   config.ts        every environment variable (zod); read only via config()
   db/schema/       Drizzle schema (auth.ts, app.ts); db/client.ts, db/migrate.ts
   auth/            Better Auth, session → principal, ADMIN_EMAILS
@@ -58,6 +60,11 @@ packages/shared/src/api/  request and response schemas
   Audit summaries never contain secrets.
 - **Configuration changes** the bot uses (agents, providers, sources, Slack,
   settings) call `notifyConfigChanged(tx)` in their transaction.
+- **Settings** of the admin pages (providers, knowledge sources, Slack,
+  agents, settings) are saved by exported service functions in `modules/`
+  that the routes and `cli settings` both call, with an `Actor`; a new
+  setting gets a module in `cli/` too. The command takes secrets only on
+  stdin.
 - **The bot must keep working** when the admin interface or the database
   hiccups: no new dependency of the bot on the web process; keep the last
   good configuration; time-limit every outside call.

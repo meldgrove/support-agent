@@ -135,7 +135,11 @@ const schema = z
     }
     for (const email of splitList(value.ADMIN_EMAILS)) {
       if (!z.email().safeParse(email).success) {
-        ctx.addIssue({ code: "custom", path: ["ADMIN_EMAILS"], message: `Not an email address: ${email}` });
+        ctx.addIssue({
+          code: "custom",
+          path: ["ADMIN_EMAILS"],
+          message: "Each entry must be an email address",
+        });
       }
     }
   });
@@ -151,6 +155,11 @@ export type Config = z.infer<typeof schema> & { adminEmails: string[] };
 
 let cached: Config | undefined;
 
+/** A missing or invalid variable. Its message names variables and rules, never values. */
+export class ConfigError extends Error {
+  override name = "ConfigError";
+}
+
 export function config(): Config {
   if (cached) return cached;
   const parsed = schema.safeParse(process.env);
@@ -158,7 +167,7 @@ export function config(): Config {
     const problems = parsed.error.issues
       .map((issue) => `  ${issue.path.join(".")}: ${issue.message}`)
       .join("\n");
-    throw new Error(`Invalid configuration:\n${problems}`);
+    throw new ConfigError(`Invalid configuration:\n${problems}`);
   }
   const value = parsed.data;
   cached = {
