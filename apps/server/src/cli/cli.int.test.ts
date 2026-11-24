@@ -768,6 +768,19 @@ describe("the cli process", () => {
     expect(refused.stderr).toContain("retentionDays:");
   });
 
+  it("prints no error text when the database refuses the connection, also with logging on", async () => {
+    const refused = await runProcess(["settings", "apply", "slack"], {
+      stdin: JSON.stringify({ alertChannelId: null }),
+      env: { DATABASE_URL: "postgres://support_agent:db-password-8c1d@127.0.0.1:1/support_agent" },
+    });
+    // The whole stderr: no log line, no address, no password.
+    expect(refused).toEqual({
+      code: 1,
+      stdout: "",
+      stderr: "Something went wrong. Try again. (ECONNREFUSED)\n",
+    });
+  });
+
   it("writes all of a long output to a slow reader before it exits", async () => {
     const channels = Array.from({ length: 2000 }, (_, index) => ({
       id: `C${String(index).padStart(8, "0")}`,

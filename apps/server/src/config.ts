@@ -151,6 +151,11 @@ export type Config = z.infer<typeof schema> & { adminEmails: string[] };
 
 let cached: Config | undefined;
 
+/** A missing or invalid variable. Its message names variables and rules, never values. */
+export class ConfigError extends Error {
+  override name = "ConfigError";
+}
+
 export function config(): Config {
   if (cached) return cached;
   const parsed = schema.safeParse(process.env);
@@ -158,7 +163,7 @@ export function config(): Config {
     const problems = parsed.error.issues
       .map((issue) => `  ${issue.path.join(".")}: ${issue.message}`)
       .join("\n");
-    throw new Error(`Invalid configuration:\n${problems}`);
+    throw new ConfigError(`Invalid configuration:\n${problems}`);
   }
   const value = parsed.data;
   cached = {

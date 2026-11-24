@@ -164,9 +164,11 @@ export async function listProviderModels(id: string): Promise<ProviderModels> {
   }
 }
 
+/** The provider as stored, for its test (404 when it is gone). */
+export const loadProvider = (id: string) => load(getDb(), id);
+
 /** The page's test button: one small model call. */
-export async function testProvider(id: string, model: string): Promise<CheckResult> {
-  const row = await load(getDb(), id);
+export async function testProvider(row: Row, model: string): Promise<CheckResult> {
   const started = performance.now();
   try {
     const reply = await generateJson(
@@ -240,10 +242,9 @@ router.get("/providers/:id/models", async (c) => {
 
 router.post("/providers/:id/test", async (c) => {
   requireAdmin(c);
-  const id = idParam(c);
-  await load(getDb(), id);
+  const row = await loadProvider(idParam(c));
   const { model } = await jsonBody(c, providerTestInputSchema);
-  return c.json(await testProvider(id, model));
+  return c.json(await testProvider(row, model));
 });
 
 export default router;

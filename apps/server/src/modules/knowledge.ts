@@ -150,9 +150,11 @@ export async function deleteKnowledgeSource(actor: Actor, id: string): Promise<v
   });
 }
 
+/** The source as stored, for its test (404 when it is gone). */
+export const loadKnowledgeSource = (id: string) => load(getDb(), id);
+
 /** The page's test search. */
-export async function testKnowledgeSource(id: string, query: string): Promise<KnowledgeTestResult> {
-  const row = await load(getDb(), id);
+export async function testKnowledgeSource(row: Row, query: string): Promise<KnowledgeTestResult> {
   const started = performance.now();
   try {
     const results = await searchSource(sourceConnection(row), query);
@@ -204,10 +206,9 @@ router.delete("/knowledge-sources/:id", async (c) => {
 
 router.post("/knowledge-sources/:id/test", async (c) => {
   requireUser(c);
-  const id = idParam(c);
-  await load(getDb(), id);
+  const row = await loadKnowledgeSource(idParam(c));
   const { query } = await jsonBody(c, knowledgeTestInputSchema);
-  return c.json(await testKnowledgeSource(id, query));
+  return c.json(await testKnowledgeSource(row, query));
 });
 
 export default router;

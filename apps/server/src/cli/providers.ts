@@ -11,6 +11,7 @@ import {
   deleteProvider,
   listProviderModels,
   listProviders,
+  loadProvider,
   readProvider,
   testProvider,
   updateProvider,
@@ -57,7 +58,7 @@ export const providers: ListSetting = {
   testOptions: { options: { model: { type: "string" } }, usage: TEST_USAGE },
   async test(id, { model }) {
     if (typeof model !== "string") throw new UsageError("Name the model to test.", TEST_USAGE);
-    await readProvider(id);
-    return testProvider(id, parseWith(providerTestInputSchema, { model }).model);
+    const row = await loadProvider(id);
+    return testProvider(row, parseWith(providerTestInputSchema, { model }).model);
   },
 };

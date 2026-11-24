@@ -1,6 +1,7 @@
 import pg from "pg";
 import { AppError } from "../http/errors";
-import { isFailedQuery, logger } from "../logger";
+import { ConfigError } from "../config";
+import { isFailedQuery } from "../logger";
 import { agents } from "./agents";
 import { app } from "./app";
 import { UsageError, type CliIo } from "./io";
@@ -50,8 +51,8 @@ or a body that is not JSON. Example bodies: ${DOCS}
 
 /**
  * What went wrong, for stderr. A database error or an unexpected one gets the
- * page's generic message: its text can quote values, and a failed query
- * carries its parameters.
+ * page's generic message, with its code at most: its text can quote values,
+ * and a failed query carries its parameters.
  */
 function report(error: unknown, io: CliIo): number {
   if (error instanceof UsageError) {
@@ -72,9 +73,15 @@ function report(error: unknown, io: CliIo): number {
     );
     return 1;
   }
-  // As on the page: the generic message, and the error in the log (stderr).
-  logger.error({ err: error }, "command failed");
-  io.err("Something went wrong. Try again.\n");
+  if (error instanceof ConfigError) {
+    io.err(`${error.message}\n`);
+    return 1;
+  }
+  // Its text could quote anything, such as an address or a header; a code such as ECONNREFUSED stays.
+  const code = (error as { code?: unknown } | null)?.code;
+  io.err(
+    `Something went wrong. Try again.${typeof code === "string" && /^[A-Z][A-Z0-9_]*$/.test(code) ? ` (${code})` : ""}\n`,
+  );
   return 1;
 }
 

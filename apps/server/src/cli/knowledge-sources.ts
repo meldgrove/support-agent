@@ -10,6 +10,7 @@ import {
   createKnowledgeSource,
   deleteKnowledgeSource,
   listKnowledgeSources,
+  loadKnowledgeSource,
   readKnowledgeSource,
   testKnowledgeSource,
   updateKnowledgeSource,
@@ -54,7 +55,7 @@ export const knowledgeSources: ListSetting = {
   testOptions: { options: { query: { type: "string" } }, usage: TEST_USAGE },
   async test(id, { query }) {
     if (typeof query !== "string") throw new UsageError("Name the search query to test.", TEST_USAGE);
-    await readKnowledgeSource(id);
-    return testKnowledgeSource(id, parseWith(knowledgeTestInputSchema, { query }).query);
+    const row = await loadKnowledgeSource(id);
+    return testKnowledgeSource(row, parseWith(knowledgeTestInputSchema, { query }).query);
   },
 };
