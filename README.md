@@ -55,3 +55,9 @@ admin interface ──▶ PostgreSQL ◀── bot reloads agents and settings o
 - [Knowledge sources](docs/knowledge-sources.md): the search API contract.
 - [Architecture](docs/architecture.md): how it works inside.
 - [Contributing](CONTRIBUTING.md): development setup and checks.
+
+## License
+
+Copyright 2026 Meldgrove
+
+Licensed under the [Apache License 2.0](LICENSE).
